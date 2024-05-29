@@ -1,51 +1,59 @@
-/* body要素のスタイル */
 body {
-    /* フォントファミリーをArial、sans-serifに設定 */
     font-family: Arial, sans-serif;
-    /* テキストを中央揃えに配置 */
     text-align: center;
 }
-
-/* ビンゴカードのスタイル */
 #bingo-card {
-    /* グリッド表示を使用してビンゴカードをレイアウト */
     display: grid;
-    /* 5つの列を持つグリッドを作成 */
-    grid-template-columns: repeat(5, 1fr);
-    /* セル間の隙間を設定 */
-    gap: 5px;
-    /* 上下に20px、左右に自動マージンを設定し、最大幅を200pxに制限 */
-    margin: 20px auto;
-    max-width: 200px;
+    grid-template-columns: repeat(5, 1fr); /* 5つの列を均等に配置 */
+    gap: 5px; /* グリッド間の間隔 */
+    margin-top: 20px; /* 上部のマージン */
+    margin-bottom: 20px; /* 下部のマージン */
+    padding: 10px; /* グリッド内のパディング */
+    justify-content: center; /* 列ごとに中央寄せ */
 }
-
-/* ビンゴカードのセルのスタイル */
 .cell {
-    /* セルの幅と高さを40pxに設定 */
-    width: 40px;
-    height: 40px;
-    /* セル内のコンテンツを中央に配置 */
     display: flex;
     align-items: center;
     justify-content: center;
-    /* 背景色をlightgrayに設定 */
     background-color: lightgray;
-    /* 黒い境界線を設定 */
     border: 1px solid black;
-    /* ポインターをカーソルに変更 */
     cursor: pointer;
+    width: 50px;
+    height: 50px;
 }
 
-/* マークされたセルのスタイル */
 .cell.marked {
-    /* 背景色を黄色に変更 */
     background-color: yellow;
 }
 
-/* 次の数字のスタイル */
 #number {
-    /* フォントサイズを2emに設定 */
     font-size: 2em;
-    /* 上部に20pxのマージンを設定 */
     margin-top: 20px;
+}
+
+#countdown {
+    font-size: 1em;
+    margin-top: 10px;
+}
+
+#log-container {
+    max-height: 150px;
+    width: 110px; /* 固定幅を指定 */
+    overflow-y: auto;
+    border: 1px solid #ccc;
+    padding: 10px;
+    margin: 20px auto; /* 自動マージンを追加して中央揃え */
+}
+#log {
+    text-align: left;
+}
+
+
+.container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.me-2 {
+    margin-right: 0.5rem; /* Bootstrapのクラスを使ってボタン間にスペースを追加 */
 }
