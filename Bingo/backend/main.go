@@ -36,6 +36,9 @@ func main() {
 	// 新しいゲームを開始するエンドポイント
 	http.HandleFunc("/new-game", NewGameHandler)
 
+	// ハンドラーを登録
+	http.HandleFunc("/check-bingo", CheckBingoHandler)
+
 	// メッセージのハンドリング
 	go handleMessages()
 
