@@ -136,12 +136,19 @@ function checkBingo() {
         },
         body: JSON.stringify({ card: window.bingoCard, marked: window.marked })
     })
-    .then(response => response.json())
+    .then(response => {
+        // レスポンスをJSONとして解析
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return response.json();
+    })
     .then(data => {
         // ビンゴが達成された場合はアラートを表示
         if (data.bingo) {
             alert('ビンゴです！');
         }
     })
-    .catch(error => console.error('Error:', error));
+    .catch(error => console.error('Error:', error.message));
 }
+
