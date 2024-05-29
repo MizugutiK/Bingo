@@ -20,10 +20,10 @@ var upgrader = websocket.Upgrader{
 var clients = make(map[*websocket.Conn]bool)
 
 // 生成されたビンゴの数字を保持するためのリスト
-var generatedNumbers = make(map[int]bool)
+var generatedNumbers = make([]int, 0)
 
 // クライアントにメッセージを送信するためのチャネル
-var broadcast = make(chan int)
+var broadcast = make(chan []int)
 
 func main() {
 	// 静的ファイルの配信
@@ -89,27 +89,31 @@ func handleMessages() {
 // 数字を生成してブロードキャストする関数
 func generateNumbers() {
 	for {
-		time.Sleep(1 * time.Minute)
+		time.Sleep(10 * time.Second)
+		// time.Sleep(1 * time.Minute)
 
 		// 新しい数字を生成
 		newNumber := rand.Intn(75) + 1
 
 		// 生成されたことのない数字を探す
-		for generatedNumbers[newNumber] {
+		for contains(generatedNumbers, newNumber) {
 			newNumber = rand.Intn(75) + 1
 		}
 
 		// 数字を保存
-		generatedNumbers[newNumber] = true
+		generatedNumbers = append(generatedNumbers, newNumber)
 
-		// クライアントにブロードキャスト
-		for client := range clients {
-			err := client.WriteJSON(newNumber)
-			if err != nil {
-				log.Printf("error: %v", err)
-				client.Close()
-				delete(clients, client)
-			}
+		// 生成された数字のリスト全体をクライアントにブロードキャスト
+		broadcast <- generatedNumbers
+	}
+}
+
+// 指定された数字がリストに含まれているかどうかを確認する関数
+func contains(numbers []int, number int) bool {
+	for _, n := range numbers {
+		if n == number {
+			return true
 		}
 	}
+	return false
 }

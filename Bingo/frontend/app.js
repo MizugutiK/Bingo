@@ -1,11 +1,11 @@
-// app.js
-
 // ビンゴカード要素を取得
 const bingoCard = document.getElementById('bingo-card');
 // 次の数字を表示する要素を取得
 const numberDiv = document.getElementById('number');
 // カウントダウンを表示する要素を取得
 const countdownDiv = document.getElementById('countdown');
+// 生成された数字のログを表示する要素を取得
+const logDiv = document.getElementById('log');
 
 // カウントダウンのインターバルを管理する変数
 let countdownInterval;
@@ -25,6 +25,8 @@ document.getElementById('new-game').addEventListener('click', () => {
             renderBingoCard(data);
             // カウントダウンを開始
             startCountdown();
+            // ログをクリア
+            logDiv.innerHTML = '';
         })
         .catch(error => console.error('Error:', error));
 });
@@ -52,7 +54,6 @@ function startCountdown() {
 // カウントダウンを更新する関数
 function updateCountdown() {
     // 分単位と秒単位を計算
-    // const minutes = Math.floor(countdownTime / 60);
     const seconds = countdownTime % 60;
     // カウントダウン要素に表示
     countdownDiv.textContent = `${seconds < 10 ? '0' : ''}${seconds}`;
@@ -62,6 +63,8 @@ function updateCountdown() {
 function renderBingoCard(data) {
     // ビンゴカードを初期化
     bingoCard.innerHTML = '';
+    // マーク状態を保持する配列を初期化
+    window.marked = Array.from({ length: 5 }, () => Array(5).fill(false));
     // ビンゴカードのデータを元にセルを作成
     data.forEach((row, i) => {
         row.forEach((cell, j) => {
@@ -90,13 +93,26 @@ const ws = new WebSocket('ws://localhost:8080/ws');
 
 // サーバーからメッセージを受信したときの処理
 ws.onmessage = function(event) {
-    // 受信したデータをパースして次の数字を取得し、表示
-    const number = JSON.parse(event.data);
-    numberDiv.textContent = `次の番号: ${number}`;
+    // 受信したデータをパースして数字のリストを取得
+    const numbers = JSON.parse(event.data);
+    // 最新の数字を取得
+    const latestNumber = numbers[numbers.length - 1];
+
+    // 数字を表示
+    numberDiv.textContent = `Newナンバー: ${latestNumber}`;
+
+    // ログに追加
+    logDiv.innerHTML = ''; // ログをクリアして再描画
+    numbers.forEach(number => {
+        const logItem = document.createElement('div');
+        logItem.textContent = `ログ:  ${number}`;
+        logDiv.appendChild(logItem);
+    });
+
     // カウントダウンを再スタート
     startCountdown();
-      // SEを再生
-      playAudio(audioPath);
+    // SEを再生
+    playAudio(audioPath);
 };
 
 // SEを再生する関数
