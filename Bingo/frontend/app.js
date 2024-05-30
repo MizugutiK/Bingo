@@ -48,6 +48,10 @@ document.getElementById('new-game').addEventListener('click', () => {
             startCountdown();
             // ログをクリア
             logDiv.innerHTML = '';
+
+            // ゲームが始まった瞬間、0を生成された数字のリストに追加してクリック可能にする
+            generatedNumbers.push(0);
+            enableClickableCells();
         })
         .catch(error => console.error('Error:', error));
 });
@@ -108,6 +112,9 @@ function renderBingoCard(data) {
             bingoCard.appendChild(cellDiv);
         });
     });
+
+    // 新しい数字が生成された後、クリック可能なセルを再設定
+    enableClickableCells();
 }
 
 // セルがクリック可能かどうかを判断する関数
@@ -122,6 +129,10 @@ ws.onmessage = function(event) {
     const numbers = JSON.parse(event.data);
     // 最新の数字を取得
     const latestNumber = numbers[numbers.length - 1];
+
+    // 新しい数字を generatedNumbers リストに追加
+    generatedNumbers.push(latestNumber);
+    console.log('Generated numbers:', generatedNumbers); // デバッグ用
 
     // ビンゴカードのセルをクリック可能にする
     enableClickableCells(latestNumber);
@@ -142,16 +153,17 @@ ws.onmessage = function(event) {
     // SEを再生
     playAudio(audioPath);
 };
+
 // ビンゴカードのセルをクリック可能にする関数
-function enableClickableCells(newNumber) {
+function enableClickableCells() {
     // ビンゴカードのすべてのセルを取得
     const cells = document.querySelectorAll('.cell');
-    // セルごとにループして、ビンゴカードの数字と一致する場合にクリック可能にする
+    // 生成された数字のリストをもとに、クリック可能なセルを設定
     cells.forEach(cell => {
         // セルに表示されている数字を取得（FREEセルの場合は'FREE'）
         const cellNumber = cell.textContent === 'FREE' ? 0 : parseInt(cell.textContent);
-        // ビンゴカードの数字と一致する場合、クリック可能にする
-        if (cellNumber === newNumber) {
+        // ビンゴカードの数字が生成された数字のリストに含まれている場合、またはセルが0である場合、クリック可能にする
+        if (generatedNumbers.includes(cellNumber) || cellNumber === 0) {
             // 既にクリック可能になっているかどうかをチェック
             if (!cell.classList.contains('clickable')) {
                 cell.classList.add('clickable'); // クリック可能にするためのクラスを追加
@@ -172,7 +184,7 @@ function cellClickHandler() {
     this.classList.toggle('marked');
     // マークされたセルの状態を記録
     const rowIndex = this.parentNode.rowIndex - 1;
-    const cellIndex = this.cellIndex;
+    const cellIndex = Array.from(this.parentNode.children).indexOf(this);
     window.marked[rowIndex][cellIndex] = !window.marked[rowIndex][cellIndex];
     // ビンゴをチェック
     checkBingo();
