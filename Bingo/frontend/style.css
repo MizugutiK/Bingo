@@ -48,12 +48,12 @@ body {
     text-align: left;
 }
 
-
 .container {
     display: flex;
     flex-direction: column;
     align-items: center;
 }
+
 .me-2 {
     margin-right: 0.5rem; /* Bootstrapのクラスを使ってボタン間にスペースを追加 */
 }
