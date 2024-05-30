@@ -7,6 +7,9 @@ import (
 
 // NewGameHandlerは新しいビンゴゲームを開始し、ビンゴカードを生成してクライアントに返します
 func NewGameHandler(w http.ResponseWriter, r *http.Request) {
+	// 生成された数字のリストをリセット
+	resetGeneratedNumbers()
+
 	// ビンゴカードを生成
 	bingoCard := generateBingoCard()
 
@@ -32,4 +35,9 @@ func CheckBingoHandler(w http.ResponseWriter, r *http.Request) {
 
 	// レスポンスをJSON形式で返す
 	json.NewEncoder(w).Encode(map[string]bool{"bingo": isBingo})
+}
+
+// 生成された数字のリストをリセットする関数
+func resetGeneratedNumbers() {
+	generatedNumbers = []int{}
 }
