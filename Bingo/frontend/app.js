@@ -12,8 +12,29 @@ let countdownInterval;
 // カウントダウンの初期値を設定（秒）
 let countdownTime = 60;
 
+// 生成された数字のリスト
+let generatedNumbers = [];
+
 // ビンゴの数字が生成されたときに再生するSEの音声ファイルのパス
 const audioPath = 'chime.mp3';
+
+// WebSocketを作成し、サーバーとの接続を確立
+const ws = new WebSocket('ws://localhost:8080/ws');
+
+// WebSocket接続が確立されたときの処理
+ws.onopen = function(event) {
+    console.log('WebSocket connection established.');
+};
+
+// WebSocketからメッセージを受信したときの処理
+ws.onmessage = function(event) {
+    console.log('Received message:', event.data);
+};
+
+// WebSocketエラーが発生したときの処理
+ws.onerror = function(error) {
+    console.error('WebSocket error:', error);
+};
 
 // 新しいゲームを開始するボタンのクリックイベントリスナーを追加
 document.getElementById('new-game').addEventListener('click', () => {
@@ -73,30 +94,37 @@ function renderBingoCard(data) {
             cellDiv.className = 'cell';
             // セルに数字を表示（FREEセルは0を表示）
             cellDiv.textContent = cell !== 0 ? cell : 'FREE';
-            // セルがクリックされた時のイベントリスナーを追加
-            cellDiv.addEventListener('click', () => {
-                // クリックされたセルがマークされた状態かどうかを切り替える
-                cellDiv.classList.toggle('marked');
-                // マークされたセルの状態を記録
-                window.marked[i][j] = !window.marked[i][j];
-                // ビンゴをチェック
-                checkBingo();
-            });
+            // セルがクリック可能な場合のみクリックイベントを追加
+            if (cell !== 0 && isClickableCell(cell)) {
+                cellDiv.classList.add('clickable'); // クリック可能にするためのクラスを追加
+                cellDiv.addEventListener('click', cellClickHandler); // クリックイベントを追加
+            }
+             // 中央のセルであればクリック可能にする
+             if (i === 2 && j === 2) {
+                cellDiv.classList.add('clickable');
+                cellDiv.addEventListener('click', cellClickHandler);
+            }
             // セルをビンゴカードに追加
             bingoCard.appendChild(cellDiv);
         });
     });
 }
 
-// WebSocketを作成し、サーバーとの接続を確立
-const ws = new WebSocket('ws://localhost:8080/ws');
+// セルがクリック可能かどうかを判断する関数
+function isClickableCell(cellValue) {
+    // 生成された数字のリストと比較して、セルの数字が含まれていない場合はクリック可能とする
+    return !generatedNumbers.includes(cellValue);
+}
 
-// サーバーからメッセージを受信したときの処理
+// 新しい数字を取得したときの処理
 ws.onmessage = function(event) {
     // 受信したデータをパースして数字のリストを取得
     const numbers = JSON.parse(event.data);
     // 最新の数字を取得
     const latestNumber = numbers[numbers.length - 1];
+
+    // ビンゴカードのセルをクリック可能にする
+    enableClickableCells(latestNumber);
 
     // 数字を表示
     numberDiv.textContent = `Newナンバー: ${latestNumber}`;
@@ -114,7 +142,41 @@ ws.onmessage = function(event) {
     // SEを再生
     playAudio(audioPath);
 };
+// ビンゴカードのセルをクリック可能にする関数
+function enableClickableCells(newNumber) {
+    // ビンゴカードのすべてのセルを取得
+    const cells = document.querySelectorAll('.cell');
+    // セルごとにループして、ビンゴカードの数字と一致する場合にクリック可能にする
+    cells.forEach(cell => {
+        // セルに表示されている数字を取得（FREEセルの場合は'FREE'）
+        const cellNumber = cell.textContent === 'FREE' ? 0 : parseInt(cell.textContent);
+        // ビンゴカードの数字と一致する場合、クリック可能にする
+        if (cellNumber === newNumber) {
+            // 既にクリック可能になっているかどうかをチェック
+            if (!cell.classList.contains('clickable')) {
+                cell.classList.add('clickable'); // クリック可能にするためのクラスを追加
+                cell.addEventListener('click', cellClickHandler); // クリックイベントを追加
+            }
+        } else {
+            // 数字が一致しない場合、クリック可能なクラスとイベントを削除
+            cell.classList.remove('clickable');
+            cell.removeEventListener('click', cellClickHandler);
+        }
+    });
+}
 
+
+// セルがクリックされたときの処理
+function cellClickHandler() {
+    // クリックされたセルがマークされた状態かどうかを切り替える
+    this.classList.toggle('marked');
+    // マークされたセルの状態を記録
+    const rowIndex = this.parentNode.rowIndex - 1;
+    const cellIndex = this.cellIndex;
+    window.marked[rowIndex][cellIndex] = !window.marked[rowIndex][cellIndex];
+    // ビンゴをチェック
+    checkBingo();
+}
 // SEを再生する関数
 function playAudio(audioPath) {
     const audio = new Audio(audioPath);
