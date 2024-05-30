@@ -177,18 +177,25 @@ function enableClickableCells() {
     });
 }
 
-
 // セルがクリックされたときの処理
 function cellClickHandler() {
     // クリックされたセルがマークされた状態かどうかを切り替える
     this.classList.toggle('marked');
+    
+    // クリックされたセルの行要素を取得
+    const rowElement = this.parentNode;
+    // クリックされたセルが含まれる行のインデックスを取得
+    const rowIndex = Array.from(rowElement.parentNode.children).indexOf(rowElement);
+    // クリックされたセルのインデックスを取得
+    const cellIndex = Array.from(rowElement.children).indexOf(this);
+
     // マークされたセルの状態を記録
-    const rowIndex = this.parentNode.rowIndex - 1;
-    const cellIndex = Array.from(this.parentNode.children).indexOf(this);
     window.marked[rowIndex][cellIndex] = !window.marked[rowIndex][cellIndex];
+
     // ビンゴをチェック
     checkBingo();
 }
+
 // SEを再生する関数
 function playAudio(audioPath) {
     const audio = new Audio(audioPath);
