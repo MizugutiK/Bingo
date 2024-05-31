@@ -21,7 +21,7 @@ func NewGameHandler(w http.ResponseWriter, r *http.Request) {
 
 // CheckBingoHandlerはビンゴが達成されたかどうかをチェックします
 func CheckBingoHandler(w http.ResponseWriter, r *http.Request) {
-	log.Println("CheckBingoHandler called")
+	// log.Println("CheckBingoHandler called")
 
 	// リクエストボディをデコード
 	var req struct {
@@ -34,8 +34,8 @@ func CheckBingoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Card: %+v\n", req.Card)
-	log.Printf("Marked: %+v\n", req.Marked)
+	// log.Printf("Card: %+v\n", req.Card)
+	// log.Printf("Marked: %+v\n", req.Marked)
 
 	// ビンゴが達成されたかをチェック
 	isBingo := checkBingo(req.Card, req.Marked)
