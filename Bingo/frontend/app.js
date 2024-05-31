@@ -8,7 +8,7 @@ const countdownDiv = document.getElementById('countdown');
 const logDiv = document.getElementById('log');
 
 // ゲーム開始
-const newgameBoton=document.getElementById('new-game');
+const newgameBoton = document.getElementById('new-game');
 // リセットボタンを取得
 const resetButton = document.getElementById('reset-game'); 
 
@@ -32,7 +32,7 @@ ws.onopen = function(event) {
 
 // WebSocketからメッセージを受信したときの処理
 ws.onmessage = function(event) {
-    console.log('Received message:', event.data);
+    // console.log('Received message:', event.data);
     handleNewNumber(event.data);
 };
 
@@ -60,7 +60,7 @@ document.getElementById('new-game').addEventListener('click', () => {
 
             // リセットボタンを非表示に
             resetButton.style.display = 'none';
-            newgameBoton.style.display="none"
+            newgameBoton.style.display = "none";
 
         })
         .catch(error => console.error('Error:', error));
@@ -92,32 +92,6 @@ function updateCountdown() {
     countdownDiv.textContent = `${seconds < 10 ? '0' : ''}${seconds}`;
 }
 
-// ビンゴカードをレンダリングする関数
-function renderBingoCard(data) {
-    bingoCard.innerHTML = ''; // ビンゴカードを初期化
-    window.marked = Array.from({ length: 5 }, () => Array(5).fill(false)); // マーク状態を保持する配列を初期化
-    data.forEach((row, i) => {
-        row.forEach((cell, j) => {
-            // セル要素を作成
-            const cellDiv = document.createElement('div');
-            cellDiv.className = 'cell';
-            cellDiv.textContent = cell !== 0 ? cell : 'FREE'; // セルに数字を表示（FREEセルは0を表示）
-            if (cell !== 0 && isClickableCell(cell)) {
-                cellDiv.classList.add('clickable');
-                cellDiv.addEventListener('click', cellClickHandler);
-            }
-             // 中央のセルであればクリック可能にする
-            if (i === 2 && j === 2) {
-                cellDiv.classList.add('clickable');
-                cellDiv.addEventListener('click', cellClickHandler);
-            }
-            // セルをビンゴカードに追加
-            bingoCard.appendChild(cellDiv);
-        });
-    });
-    enableClickableCells(); // 新しい数字が生成された後、クリック可能なセルを再設定
-}
-
 // セルがクリック可能かどうかを判断する関数
 function isClickableCell(cellValue) {
     return !generatedNumbers.includes(cellValue); // 生成された数字のリストと比較して、セルの数字が含まれていない場合はクリック可能とする
@@ -130,7 +104,7 @@ function handleNewNumber(data) {
 
     // 新しい数字を generatedNumbers リストに追加
     generatedNumbers.push(latestNumber);
-    console.log('Generated numbers:', generatedNumbers);
+    // console.log('Generated numbers:', generatedNumbers);
 
     // ビンゴカードのセルをクリック可能にする
     enableClickableCells(latestNumber);
@@ -155,7 +129,6 @@ function handleNewNumber(data) {
     if (generatedNumbers.length >= 76) {
         // リセットボタンを表示
         resetButton.style.display = 'block';
-       
     }
 }
 
@@ -182,13 +155,64 @@ function enableClickableCells() {
     });
 }
 
+
+// SEを再生する関数
+function playAudio(audioPath) {
+    const audio = new Audio(audioPath);
+    audio.play();
+}
+
+// ビンゴカードをレンダリングする関数
+function renderBingoCard(data) {
+    bingoCard.innerHTML = ''; // ビンゴカードを初期化
+    window.marked = Array.from({ length: 5 }, () => Array(5).fill(false)); // マーク状態を保持する配列を初期化
+    data.forEach((row, i) => {
+        console.log(`Row ${i + 1}: Number of cells: ${row.length}`);
+        // ビンゴカードの各行ごとにセルを生成
+        for (let j = 0; j < 5; j++) {
+            // セル要素を作成
+            const cellDiv = document.createElement('div');
+            cellDiv.className = 'cell';
+            cellDiv.dataset.rowIndex = i; // データ属性に行インデックスを追加
+            cellDiv.dataset.cellIndex = j; // データ属性に列インデックスを追加
+            // セルに数字を表示（FREEセルは0を表示）
+            if (j < row.length) {
+                cellDiv.textContent = row[j] !== 0 ? row[j] : 'FREE';
+            } else {
+                cellDiv.textContent = ''; // セルが存在しない場合は空白にする
+            }
+            // セルがクリック可能かどうかをチェック
+            if (j < row.length && row[j] !== 0 && isClickableCell(row[j])) {
+                cellDiv.classList.add('clickable');
+                cellDiv.addEventListener('click', cellClickHandler);
+            }
+            // 中央のセルであればクリック可能にする
+            if (i === 2 && j === 2) {
+                cellDiv.classList.add('clickable');
+                cellDiv.addEventListener('click', cellClickHandler);
+            }
+            // セルをビンゴカードに追加
+            bingoCard.appendChild(cellDiv);
+
+            // マークされたカードの配列を生成
+            if (!window.marked[i]) {
+                window.marked[i] = [];
+            }
+            // フリーマスの場合はtrueを設定
+            window.marked[i][j] = (j < row.length && row[j] === 0) ? true : false;
+        }
+    });
+    enableClickableCells(); // 新しい数字が生成された後、クリック可能なセルを再設定
+}
+
 // セルがクリックされたときの処理
 function cellClickHandler() {
     // クリックされたセルがマークされた状態かどうかを切り替える
-    this.classList.toggle('marked');
-    const rowIndex = Math.floor(Array.from(bingoCard.children).indexOf(this) / 5);
-    const cellIndex = Array.from(this.parentNode.children).indexOf(this);
+    const rowIndex = parseInt(this.dataset.rowIndex); // データ属性から行インデックスを取得
+    const cellIndex = parseInt(this.dataset.cellIndex); // データ属性から列インデックスを取得
     window.marked[rowIndex][cellIndex] = !window.marked[rowIndex][cellIndex];
+    this.classList.toggle('marked');
+    console.log(`Cell clicked: row ${rowIndex}, column ${cellIndex}, marked: ${window.marked[rowIndex][cellIndex]}`);
 
     // ビンゴをチェック
     checkBingo();
@@ -207,15 +231,20 @@ ws.onerror = function(error) {
 
 // ビンゴをチェックする関数
 function checkBingo() {
+    console.log('Checking bingo...');
+    console.log('Marked card:', window.marked);
+
     // ビンゴをチェックするリクエストをサーバーに送信
     fetch('/check-bingo', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ card: window.bingoCard, marked: window.marked })
+        body: JSON.stringify({ marked: window.marked }) // bingoCard ではなく marked を送信
     })
     .then(response => {
+        console.log('Response received:', response);
+
         // レスポンスをJSONとして解析
         if (!response.ok) {
             throw new Error('Network response was not ok');
@@ -223,10 +252,12 @@ function checkBingo() {
         return response.json();
     })
     .then(data => {
+        console.log('Bingo check result:', data);
+
         // ビンゴが達成された場合はアラートを表示
         if (data.bingo) {
             alert('ビンゴです！');
-            newgameBoton.style.display="block"
+            newgameBoton.style.display = "block";
         }
     })
     .catch(error => console.error('Error:', error.message));
