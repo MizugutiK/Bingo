@@ -74,11 +74,5 @@ func checkBingo(card BingoCard, marked [5][5]bool) bool {
 			break
 		}
 	}
-	if diagonal2 {
-		// log.Println("Bingo found in right-to-left diagonal")
-		return true
-	}
-
-	// log.Println("No Bingo found")
-	return false
+	return diagonal2
 }

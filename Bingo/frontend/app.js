@@ -51,8 +51,6 @@ document.getElementById('new-game').addEventListener('click', () => {
             renderBingoCard(data);
             // カウントダウンを開始
             startCountdown();
-            // ログをクリア
-            logDiv.innerHTML = '';
 
             // ゲームが始まった瞬間、0を生成された数字のリストに追加してクリック可能にする
             generatedNumbers = [0];
@@ -268,18 +266,25 @@ function checkBingo() {
 
 // リセットボタンのクリックイベントリスナーを追加
 resetButton.addEventListener('click', () => {
-    // 生成された数字のリストをリセット
-    generatedNumbers = [];
-    // ビンゴカードをクリア
-    bingoCard.innerHTML = '';
-    // 数字表示をクリア
-    numberDiv.textContent = '';
-    // ログをクリア
-    logDiv.innerHTML = '';
-    // カウントダウンをリセット
-    clearInterval(countdownInterval);
-    countdownDiv.textContent = '';
+fetch('/reset-generated-numbers')
+.then(response => {
+    if (response.ok) {
+        // 生成された数字のリストをリセット
+        generatedNumbers = [];
+        // 数字表示をクリア
+        numberDiv.textContent = '';
+        // ログをクリア
+        logDiv.innerHTML = '';
+        // カウントダウンをリセット
+        clearInterval(countdownInterval);
+        countdownDiv.textContent = '';
 
-    // リセットボタンを非表示に
-    resetButton.style.display = 'none';
+        // リセットボタンを非表示に
+        resetButton.style.display = 'none';
+        newgameBoton.style.display = "block";
+    } else {
+        console.error('Failed to reset generated numbers');
+    }
+})
+.catch(error => console.error('Error:', error));
 });
