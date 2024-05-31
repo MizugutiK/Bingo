@@ -38,7 +38,7 @@ ws.onmessage = function(event) {
 
 // WebSocketエラーが発生したときの処理
 ws.onerror = function(error) {
-    console.error('WebSocket error:', error);
+     console.error('WebSocket error:', error);
 };
 
 // 新しいゲームを開始するボタンのクリックイベントリスナーを追加
@@ -153,7 +153,13 @@ function enableClickableCells() {
             cell.removeEventListener('click', cellClickHandler);
         }
     });
+
+    // 中央のセルを常にクリック可能にする
+    const centerCell = document.querySelector('[data-row-index="2"][data-cell-index="2"]');
+    centerCell.classList.add('clickable');
+    centerCell.addEventListener('click', cellClickHandler);
 }
+
 
 
 // SEを再生する関数
@@ -167,7 +173,7 @@ function renderBingoCard(data) {
     bingoCard.innerHTML = ''; // ビンゴカードを初期化
     window.marked = Array.from({ length: 5 }, () => Array(5).fill(false)); // マーク状態を保持する配列を初期化
     data.forEach((row, i) => {
-        console.log(`Row ${i + 1}: Number of cells: ${row.length}`);
+        // console.log(`Row ${i + 1}: Number of cells: ${row.length}`);
         // ビンゴカードの各行ごとにセルを生成
         for (let j = 0; j < 5; j++) {
             // セル要素を作成
@@ -212,7 +218,7 @@ function cellClickHandler() {
     const cellIndex = parseInt(this.dataset.cellIndex); // データ属性から列インデックスを取得
     window.marked[rowIndex][cellIndex] = !window.marked[rowIndex][cellIndex];
     this.classList.toggle('marked');
-    console.log(`Cell clicked: row ${rowIndex}, column ${cellIndex}, marked: ${window.marked[rowIndex][cellIndex]}`);
+    // console.log(`Cell clicked: row ${rowIndex}, column ${cellIndex}, marked: ${window.marked[rowIndex][cellIndex]}`);
 
     // ビンゴをチェック
     checkBingo();
@@ -231,8 +237,8 @@ ws.onerror = function(error) {
 
 // ビンゴをチェックする関数
 function checkBingo() {
-    console.log('Checking bingo...');
-    console.log('Marked card:', window.marked);
+    // console.log('Checking bingo...');
+    // console.log('Marked card:', window.marked);
 
     // ビンゴをチェックするリクエストをサーバーに送信
     fetch('/check-bingo', {
@@ -243,7 +249,7 @@ function checkBingo() {
         body: JSON.stringify({ marked: window.marked }) // bingoCard ではなく marked を送信
     })
     .then(response => {
-        console.log('Response received:', response);
+        // console.log('Response received:', response);
 
         // レスポンスをJSONとして解析
         if (!response.ok) {
@@ -252,7 +258,7 @@ function checkBingo() {
         return response.json();
     })
     .then(data => {
-        console.log('Bingo check result:', data);
+        // console.log('Bingo check result:', data);
 
         // ビンゴが達成された場合はアラートを表示
         if (data.bingo) {
