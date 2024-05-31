@@ -32,9 +32,16 @@ ws.onopen = function(event) {
 
 // WebSocketからメッセージを受信したときの処理
 ws.onmessage = function(event) {
-    // console.log('Received message:', event.data);
+    // サーバーから送信された生成された数字のリストを取得
+    const generatedNumbersFromServer = JSON.parse(event.data);
+    // 生成された数字のリストをフロントエンドに反映
+    generatedNumbers = generatedNumbersFromServer;
+    // ビンゴカードのセルをクリック可能に設定
+    enableClickableCells();
+    // 新しい数字を処理
     handleNewNumber(event.data);
 };
+
 
 // WebSocketエラーが発生したときの処理
 ws.onerror = function(error) {
@@ -53,7 +60,9 @@ document.getElementById('new-game').addEventListener('click', () => {
             startCountdown();
 
             // ゲームが始まった瞬間、0を生成された数字のリストに追加してクリック可能にする
-            generatedNumbers = [0];
+            // generatedNumbers = [0];
+            // 生成された数字のリストをフロントエンドに反映
+            generatedNumbers = data.generatedNumbers;
             enableClickableCells();
 
             // リセットボタンを非表示に
@@ -92,7 +101,8 @@ function updateCountdown() {
 
 // セルがクリック可能かどうかを判断する関数
 function isClickableCell(cellValue) {
-    return !generatedNumbers.includes(cellValue); // 生成された数字のリストと比較して、セルの数字が含まれていない場合はクリック可能とする
+    // 生成された数字のリストと比較して、セルの数字が含まれていない場合はクリック可能とする
+    return !generatedNumbers.includes(cellValue); 
 }
 
 // 新しい数字を取得したときの処理
@@ -139,7 +149,7 @@ function enableClickableCells() {
         // セルに表示されている数字を取得（FREEセルの場合は'FREE'）
         const cellNumber = cell.textContent === 'FREE' ? 0 : parseInt(cell.textContent);
         // ビンゴカードの数字が生成された数字のリストに含まれている場合、またはセルが0である場合、クリック可能にする
-        if (generatedNumbers.includes(cellNumber) || cellNumber === 0) {
+        if (Array.isArray(generatedNumbers) && (generatedNumbers.includes(cellNumber) || cellNumber === 0)) {
             // 既にクリック可能になっているかどうかをチェック
             if (!cell.classList.contains('clickable')) {
                 cell.classList.add('clickable'); // クリック可能にするためのクラスを追加
