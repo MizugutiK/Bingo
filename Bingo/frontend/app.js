@@ -160,8 +160,6 @@ function enableClickableCells() {
     centerCell.addEventListener('click', cellClickHandler);
 }
 
-
-
 // SEを再生する関数
 function playAudio(audioPath) {
     const audio = new Audio(audioPath);
@@ -171,7 +169,8 @@ function playAudio(audioPath) {
 // ビンゴカードをレンダリングする関数
 function renderBingoCard(data) {
     bingoCard.innerHTML = ''; // ビンゴカードを初期化
-    window.marked = Array.from({ length: 5 }, () => Array(5).fill(false)); // マーク状態を保持する配列を初期化
+    // マーク状態を保持する配列を初期化
+    window.marked = Array.from({ length: 5 }, () => Array(5).fill(false)); 
     data.forEach((row, i) => {
         // console.log(`Row ${i + 1}: Number of cells: ${row.length}`);
         // ビンゴカードの各行ごとにセルを生成
@@ -204,8 +203,6 @@ function renderBingoCard(data) {
             if (!window.marked[i]) {
                 window.marked[i] = [];
             }
-            // フリーマスの場合はtrueを設定
-            window.marked[i][j] = (j < row.length && row[j] === 0) ? true : false;
         }
     });
     enableClickableCells(); // 新しい数字が生成された後、クリック可能なセルを再設定
@@ -238,7 +235,7 @@ ws.onerror = function(error) {
 // ビンゴをチェックする関数
 function checkBingo() {
     // console.log('Checking bingo...');
-    // console.log('Marked card:', window.marked);
+    console.log('Marked card:', window.marked);
 
     // ビンゴをチェックするリクエストをサーバーに送信
     fetch('/check-bingo', {
