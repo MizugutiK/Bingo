@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"math/rand"
 	"time"
 )
@@ -35,9 +36,12 @@ func generateBingoCard() BingoCard {
 
 // checkBingoはビンゴが達成されたかどうかをチェックします
 func checkBingo(card BingoCard, marked [5][5]bool) bool {
+	log.Println("Checking Bingo...")
+
 	// 横方向のチェック
 	for i := 0; i < 5; i++ {
 		if marked[i][0] && marked[i][1] && marked[i][2] && marked[i][3] && marked[i][4] {
+			log.Printf("Bingo found in row %d\n", i)
 			return true
 		}
 	}
@@ -45,17 +49,37 @@ func checkBingo(card BingoCard, marked [5][5]bool) bool {
 	// 縦方向のチェック
 	for j := 0; j < 5; j++ {
 		if marked[0][j] && marked[1][j] && marked[2][j] && marked[3][j] && marked[4][j] {
+			log.Printf("Bingo found in column %d\n", j)
 			return true
 		}
 	}
 
-	// 斜め方向のチェック
-	if marked[0][0] && marked[1][1] && marked[2][2] && marked[3][3] && marked[4][4] {
-		return true
+	// 斜め方向のチェック（左上から右下）
+	diagonal1 := true
+	for i := 0; i < 5; i++ {
+		if !marked[i][i] {
+			diagonal1 = false
+			break
+		}
 	}
-	if marked[0][4] && marked[1][3] && marked[2][2] && marked[3][1] && marked[4][0] {
+	if diagonal1 {
+		log.Println("Bingo found in left-to-right diagonal")
 		return true
 	}
 
+	// 斜め方向のチェック（右上から左下）
+	diagonal2 := true
+	for i := 0; i < 5; i++ {
+		if !marked[i][4-i] {
+			diagonal2 = false
+			break
+		}
+	}
+	if diagonal2 {
+		log.Println("Bingo found in right-to-left diagonal")
+		return true
+	}
+
+	log.Println("No Bingo found")
 	return false
 }
