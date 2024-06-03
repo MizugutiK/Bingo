@@ -1,3 +1,18 @@
+document.addEventListener("DOMContentLoaded", function() {
+    const cells = document.querySelectorAll(".cell");
+
+    // すべてのセルのフォントサイズを調整
+    cells.forEach(function(cell) {
+        adjustFontSize(cell);
+    });
+
+    // ウィンドウサイズが変更されたときにフォントサイズを再調整
+    window.addEventListener("resize", function() {
+        cells.forEach(function(cell) {
+            adjustFontSize(cell);
+        });
+    });
+
 // 必要な要素を取得
 const bingoCard = document.getElementById('bingo-card');
 // 次の数字を表示する要素を取得
@@ -23,6 +38,11 @@ let generatedNumbers = [];
 const audioPath = 'chime.mp3';
 
 // WebSocketを作成し、サーバーとの接続を確立
+
+// nginx用
+// const ws = new WebSocket('wss://localhost:8080/ws');
+
+// ローカル用
 const ws = new WebSocket('ws://localhost:8080/ws');
 
 // WebSocket接続が確立されたときの処理
@@ -42,14 +62,13 @@ ws.onmessage = function(event) {
     handleNewNumber(event.data);
 };
 
-
 // WebSocketエラーが発生したときの処理
 ws.onerror = function(error) {
      console.error('WebSocket error:', error);
 };
 
 // 新しいゲームを開始するボタンのクリックイベントリスナーを追加
-document.getElementById('new-game').addEventListener('click', () => {
+newgameBoton.addEventListener('click', () => {
     // 新しいゲームをサーバーにリクエスト
     fetch('/new-game')
         .then(response => response.json())
@@ -190,7 +209,7 @@ function renderBingoCard(data) {
             cellDiv.dataset.cellIndex = j; // データ属性に列インデックスを追加
             // セルに数字を表示（FREEセルは0を表示）
             if (j < row.length) {
-                cellDiv.textContent = row[j] !== 0 ? row[j] : 'FREE';
+                cellDiv.textContent = row[j] !== 0 ? row[j] : '☆';
             } else {
                 cellDiv.textContent = ''; // セルが存在しない場合は空白にする
             }
@@ -211,6 +230,7 @@ function renderBingoCard(data) {
             if (!window.marked[i]) {
                 window.marked[i] = [];
             }
+            adjustFontSize(cellDiv); // 追加されたセルのフォントサイズを調整
         }
     });
     enableClickableCells(); // 新しい数字が生成された後、クリック可能なセルを再設定
@@ -297,4 +317,10 @@ fetch('/reset-generated-numbers')
     }
 })
 .catch(error => console.error('Error:', error));
+});
+function adjustFontSize(cell) {
+    var cellSize = Math.min(cell.offsetWidth, cell.offsetHeight);
+    var fontSize = cellSize * 0.3; // セルのサイズに基づいたフォントサイズ
+    cell.style.fontSize = fontSize + "px";
+}
 });

@@ -1,51 +1,68 @@
 body {
-    font-family: Arial, sans-serif;
+    font-family: "Hachi Maru Pop", cursive;
+    font-weight: 400;
+    font-style: normal;
     text-align: center;
+    font-size: 2vw; /* 全体のフォントサイズを設定 */
 }
+
 #bingo-card {
     display: grid;
     grid-template-columns: repeat(5, 1fr); /* 5つの列を均等に配置 */
-    gap: 5px; /* グリッド間の間隔 */
-    margin-top: 20px; /* 上部のマージン */
-    margin-bottom: 20px; /* 下部のマージン */
-    padding: 10px; /* グリッド内のパディング */
+    gap: 2%; /* グリッド間の間隔 */
+    margin-top: 3%; /* 上部のマージン */
+    margin-bottom: 3%; /* 下部のマージン */
+    padding: 3%; /* グリッド内のパディング */
     justify-content: center; /* 列ごとに中央寄せ */
 }
+
 .cell {
     display: flex;
     align-items: center;
     justify-content: center;
     background-color: lightgray;
-    border: 1px solid black;
+    border: 1px solid black; /* ボーダーのサイズを調整 */
     cursor: pointer;
-    width: 50px;
-    height: 50px;
+    width: 18vw; /* ビューポート幅の18% */
+    height: 18vw; /* ビューポート幅の18% */
+    max-width: 100px; /* 最大幅を指定 */
+    max-height: 100px; /* 最大高さを指定 */
+    font-size: 3vw; /* セル内のフォントサイズを設定 */
+    overflow: hidden; /* セルの境界を超えないように設定 */
+    text-overflow: ellipsis; /* 文字があふれたときに省略記号を表示 */
+    white-space: nowrap; /* 文字を折り返さない */
 }
 
 .cell.marked {
     background-color: yellow;
 }
 
+.cell.small-font {
+    font-size: 1.5vw; /* 特定のセルのフォントサイズを設定 */
+}
+
 #number {
-    font-size: 2em;
-    margin-top: 20px;
+    font-size: 4vw; /* ビューポート幅に基づいたフォントサイズ */
+    margin-top: 10%;
 }
 
 #countdown {
-    font-size: 1em;
-    margin-top: 10px;
+    font-size: 2vw; /* ビューポート幅に基づいたフォントサイズ */
+    margin-top: 10%;
 }
 
 #log-container {
     max-height: 150px;
-    width: 110px; /* 固定幅を指定 */
+    width: 30%; /* 固定幅を指定 */
     overflow-y: auto;
     border: 1px solid #ccc;
     padding: 10px;
-    margin: 20px auto; /* 自動マージンを追加して中央揃え */
+    margin: 3vw auto; /* 自動マージンを追加して中央揃え */
 }
+
 #log {
     text-align: left;
+    font-size: 3.5vw; /* ログのフォントサイズを設定 */
 }
 
 .container {
