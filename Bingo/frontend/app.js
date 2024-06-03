@@ -243,7 +243,7 @@ ws.onerror = function(error) {
 // ビンゴをチェックする関数
 function checkBingo() {
     // console.log('Checking bingo...');
-    console.log('Marked card:', window.marked);
+    // console.log('Marked card:', window.marked);
 
     // ビンゴをチェックするリクエストをサーバーに送信
     fetch('/check-bingo', {

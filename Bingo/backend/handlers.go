@@ -50,8 +50,3 @@ func ResetGeneratedNumbersHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Generated numbers have been reset"))
 }
-
-// // 生成された数字のリストをリセットする関数
-// func resetGeneratedNumbers() {
-// 	generatedNumbers = []int{}
-// }
