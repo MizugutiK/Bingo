@@ -39,6 +39,9 @@ func main() {
 	// ハンドラーを登録
 	http.HandleFunc("/check-bingo", CheckBingoHandler)
 
+	// 生成された数字のリストをリセットするエンドポイント
+	http.HandleFunc("/reset-generated-numbers", ResetGeneratedNumbersHandler)
+
 	// メッセージのハンドリング
 	go handleMessages()
 
@@ -92,8 +95,8 @@ func handleMessages() {
 // 数字を生成してブロードキャストする関数
 func generateNumbers() {
 	for {
-		time.Sleep(10 * time.Second)
-		// time.Sleep(1 * time.Minute)
+		// time.Sleep(10 * time.Second)
+		time.Sleep(1 * time.Minute)
 
 		// 新しい数字を生成
 		newNumber := rand.Intn(75) + 1
