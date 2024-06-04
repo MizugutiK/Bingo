@@ -3,7 +3,7 @@ body {
     font-weight: 400;
     font-style: normal;
     text-align: center;
-    font-size: 2vw; /* 全体のフォントサイズを設定 */
+    font-size: 1vw; /* 全体のフォントサイズを設定 */
 }
 
 #bingo-card {
@@ -23,10 +23,10 @@ body {
     background-color: lightgray;
     border: 1px solid black; /* ボーダーのサイズを調整 */
     cursor: pointer;
-    width: 18vw; /* ビューポート幅の18% */
-    height: 18vw; /* ビューポート幅の18% */
-    max-width: 100px; /* 最大幅を指定 */
-    max-height: 100px; /* 最大高さを指定 */
+    width: 16vw; /* ビューポート幅の18% */
+    height: 16vw; /* ビューポート幅の18% */
+    max-width: 95px; /* 最大幅を指定 */
+    max-height: 95px; /* 最大高さを指定 */
     font-size: 3vw; /* セル内のフォントサイズを設定 */
     overflow: hidden; /* セルの境界を超えないように設定 */
     text-overflow: ellipsis; /* 文字があふれたときに省略記号を表示 */
@@ -42,7 +42,7 @@ body {
 }
 
 #number {
-    font-size: 4vw; /* ビューポート幅に基づいたフォントサイズ */
+    font-size: 3vw; /* ビューポート幅に基づいたフォントサイズ */
     margin-top: 10%;
 }
 
@@ -62,7 +62,7 @@ body {
 
 #log {
     text-align: left;
-    font-size: 3.5vw; /* ログのフォントサイズを設定 */
+    font-size: 2.25vw; /* ログのフォントサイズを設定 */
 }
 
 .container {
