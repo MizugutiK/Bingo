@@ -320,7 +320,7 @@ fetch('/reset-generated-numbers')
 });
 function adjustFontSize(cell) {
     var cellSize = Math.min(cell.offsetWidth, cell.offsetHeight);
-    var fontSize = cellSize * 0.3; // セルのサイズに基づいたフォントサイズ
+    var fontSize = cellSize * 0.35; // セルのサイズに基づいたフォントサイズ
     cell.style.fontSize = fontSize + "px";
 }
 });
