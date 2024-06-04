@@ -6,6 +6,14 @@ body {
     font-size: 1vw; /* 全体のフォントサイズを設定 */
 }
 
+#new-game{
+    font-size: 1vw; /* 全体のフォントサイズを設定 */
+}
+
+#reset-game{
+    font-size: 1vw; /* 全体のフォントサイズを設定 */
+}
+
 #bingo-card {
     display: grid;
     grid-template-columns: repeat(5, 1fr); /* 5つの列を均等に配置 */
