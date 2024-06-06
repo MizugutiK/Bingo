@@ -116,6 +116,8 @@ func handleMessages() {
 				client.Close()
 				delete(clients, client)
 			}
+			// 送信データをログに出力
+			log.Printf("Sent data: %v", number)
 		}
 	}
 }
@@ -220,15 +222,7 @@ func generatePassword(length int) string {
 
 // JoinRoomHandler 関数内でルームに参加する際にパスワードを検証する
 func JoinRoomHandler(w http.ResponseWriter, r *http.Request) {
-	log.Println("JoinRoomHandler 関数通ってる")
-
-	// // WebSocket接続を確立
-	// ws, err := upgrader.Upgrade(w, r, nil)
-	// if err != nil {
-	// 	log.Printf("ウェブソケットのアップグレードエラー: %v", err)
-	// 	return // エラーが発生した場合はここで終了する
-	// }
-	// defer ws.Close()
+	// log.Println("JoinRoomHandler 関数通ってる")
 
 	// リクエストボディを読み取る前にログ出力
 	requestBody, err := ioutil.ReadAll(r.Body)
@@ -260,7 +254,7 @@ func JoinRoomHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if room == nil {
-		log.Printf("パスワード無効: %s", req.Password)
+		log.Printf("パスワード: %s", req.Password)
 		http.Error(w, "Invalid password", http.StatusForbidden)
 		return
 	}
@@ -277,12 +271,14 @@ func JoinRoomHandler(w http.ResponseWriter, r *http.Request) {
 	resp := map[string]string{
 		"room_id": roomID,
 	}
-	if err := ws.WriteJSON(resp); err != nil {
-		log.Printf("ウェブソケット通信エラー: %v", err)
+	// 正常なレスポンスを返す
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Printf("JoinRoomHandler関数エラー: JSON encode error: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	log.Printf("無問題: %s", roomID)
 }
 
 // CreateRoomHandler関数内でルーム作成時に暗証番号を生成
@@ -305,7 +301,15 @@ func CreateRoomHandler(w http.ResponseWriter, r *http.Request) {
 
 	// レスポンスにパスワードを含める
 	resp := map[string]string{
-		"password": password, // ここで生成したパスワードを使用する
+		"password": password,
 	}
-	json.NewEncoder(w).Encode(resp)
+
+	// 正常なレスポンスを返す
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Printf("CreateRoomHandler関数エラー: JSON encode error: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
