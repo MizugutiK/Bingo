@@ -34,9 +34,6 @@ func CheckBingoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// log.Printf("Card: %+v\n", req.Card)
-	// log.Printf("Marked: %+v\n", req.Marked)
-
 	// ビンゴが達成されたかをチェック
 	isBingo := checkBingo(req.Card, req.Marked)
 
