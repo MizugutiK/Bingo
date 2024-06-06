@@ -1,4 +1,3 @@
-let createRoomButton; // createRoomButtonを外部スコープで定義
 let ws;
 
 document.addEventListener("DOMContentLoaded", function() {
@@ -53,10 +52,13 @@ document.addEventListener("DOMContentLoaded", function() {
     const numberDiv         = document.getElementById('number');
     const countdownDiv      = document.getElementById('countdown');
     const logDiv            = document.getElementById('log');
+    // ルーム名を表示する要素を取得
+    const roomNameDisplay   = document.getElementById('roomNameDisplay');
 
     const newgameButton     = document.getElementById('new-game');
     const resetButton       = document.getElementById('reset-game');
     const joinRoomButton    = document.getElementById('join-room');
+    const roomNameInput     = document.getElementById('roomname');
     const createRoomButton  = document.getElementById('create-room');
 
 
@@ -99,8 +101,12 @@ document.addEventListener("DOMContentLoaded", function() {
 
     // ルームに参加する関数
     function    joinRoom() {
+        const roomName = roomNameInput.value.trim(); 
         const password      = document.getElementById('room-password').value;
         console.log     ('Password:', password); // パスワードをログに出力
+
+        // ルーム名をブラウザ上に表示
+        roomNameDisplay.textContent = `ルーム名: ${roomName}`;
 
         fetch('/join-room', {
             method: 'POST',
@@ -113,29 +119,36 @@ document.addEventListener("DOMContentLoaded", function() {
         .catch(handleJoinRoomError);
     }
 
+
     // WebSocket接続を作成する関数
     function    createRoom() {
-        // ルームを作成するリクエストをサーバーに送信
-        fetch('/create-room', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ host: 'Your Host Name', room_type: 'public' }) // ホスト名とルームタイプを指定（適切な値に変更）
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.password) {
-                alert(`Generated Password: ${data.password}`);
-                console.log     ('Password:', data.password);
-            } else {
-                alert('Failed to generate room password');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error.message);
-        });
-    }
+    const roomName = roomNameInput.value.trim(); // ルーム名を取得してトリム
+
+     if (roomName !== '') {
+    fetch('/create-room', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ host: 'Your Host Name', room_type: 'public' }) // ホスト名とルームタイプを指定（適切な値に変更）
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.password) {
+            alert(`Generated Password: ${data.password}`);
+            console.log('Password:', data.password);
+        } else {
+            alert('Failed to generate room password');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error.message);
+    });
+} else {
+    // ルーム名が空の場合はアラートを表示するなど、適切な処理を行う
+    alert('ルーム名を入力してください。');
+}
+}
 
     let countdownInterval;
     let countdownTime = 60;
