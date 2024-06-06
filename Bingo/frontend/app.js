@@ -14,34 +14,87 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     });
 
-    // createRoomButtonを定義
-    createRoomButton = document.getElementById('create-room'); 
-    // createRoomButtonにクリックイベントリスナーを追加
-    createRoomButton.addEventListener('click', () => {
-        // ルームを作成するリクエストをサーバーに送信
-        fetch('/create-room', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ host: 'example' }) 
-        })
-        .then(response => {
-            // レスポンスをJSONとして解析
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            return response.json();
-        })
-        .then(data => {
-            // レスポンスデータをログに出力
-            console.log('Room created:', data);
+let ws;    
+// WebSocketの設定
+const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const wsHost = `${wsProtocol}//localhost:8080/ws`;
 
-            // 作成されたルームのIDとパスワードを表示
-            alert(`Room created!\nRoom ID: ${data.room_id}\nPassword: ${data.password}`);
-        })
-        .catch(error => console.error('Error:', error.message));
+// createRoomButtonを定義
+ createRoomButton = document.getElementById('create-room'); 
+// create-room ボタンのクリックイベントリスナーを追加
+createRoomButton.addEventListener('click', () => {
+
+     
+
+    // ルームを作成するリクエストをサーバーに送信
+    fetch('/create-room', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ host: 'Your Host Name', room_type: 'public' }) // ホスト名とルームタイプを指定（適切な値に変更）
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.password) {
+            alert(`Generated Password: ${data.password}`);
+            console.log('Password:', data.password);
+        } else {
+            alert('Failed to generate room password');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error.message);
     });
+
+});
+
+ // ルーム参加ボタンと入力フィールドを取得
+ const joinRoomButton = document.getElementById('join-room');
+// ルーム参加ボタンにクリックイベントリスナーを追加
+joinRoomButton.addEventListener('click', () => {
+    const password = document.getElementById('room-password').value;
+    console.log('Password:', password); // パスワードをログに出力
+
+    fetch('/join-room', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ password: password })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Response data:', data); // データをログに出力
+        if (data.room_id) {
+            alert(`Joined room ${data.room_id}`);
+            // WebSocket接続を確立
+            ws = new WebSocket(`${wsHost}?room_id=${data.room_id}`);
+
+            ws.onopen = () => {
+                console.log('WebSocket connection established for room:', data.room_id);
+            };
+
+            ws.onmessage = event => {
+                handleNewNumber(event.data);
+            };
+
+            ws.onerror = error => {
+                console.error('WebSocket error:', error);
+            };
+
+            ws.onclose = event => {
+                console.log('WebSocket connection closed:', event);
+            };
+        } else {
+            alert('Failed to join room');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error.message);
+    });
+
+});
 
     // 必要な要素を取得
     const bingoCard = document.getElementById('bingo-card');
@@ -56,16 +109,12 @@ document.addEventListener("DOMContentLoaded", function() {
     let generatedNumbers = [];
     const audioPath = 'chime.mp3';
 
-    // WebSocketを作成し、サーバーとの接続を確立
-
-    // nginx用
-    // const ws = new WebSocket('wss://localhost:8080/ws');
-
-    // ローカル用
-    const ws = new WebSocket('ws://localhost:8080/ws');
+// WebSocketのイベントリスナーを定義
+function initializeWebSocket() {
+    ws = new WebSocket(wsHost);
 
     ws.onopen = function(event) {
-        console.log('WebSocket connection established.');
+        console.log('WebSocket接続が確立された.');
     };
 
     ws.onmessage = function(event) {
@@ -76,8 +125,15 @@ document.addEventListener("DOMContentLoaded", function() {
     };
 
     ws.onerror = function(error) {
-        console.error('WebSocket error:', error);
+        console.error(' WebSocketエラー:', error);
     };
+
+    ws.onclose = function(event) {
+        console.log('WebSocket接続が閉じた:', event);
+    };
+}
+
+initializeWebSocket();
 
     // 新しいゲームを開始するボタンのクリックイベントリスナーを追加
     newgameBoton.addEventListener('click', () => {
@@ -151,6 +207,9 @@ document.addEventListener("DOMContentLoaded", function() {
     // ビンゴカードのセルをクリック可能にする関数
     function enableClickableCells() {
         const cells = document.querySelectorAll('.cell');
+        if (!cells || cells.length === 0) {
+            return; // セルが存在しない場合は処理を中止
+        }
         cells.forEach(cell => {
             const cellNumber = cell.textContent === 'FREE' ? 0 : parseInt(cell.textContent);
             if (Array.isArray(generatedNumbers) && (generatedNumbers.includes(cellNumber) || cellNumber === 0)) {
