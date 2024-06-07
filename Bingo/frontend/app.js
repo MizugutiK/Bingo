@@ -60,7 +60,8 @@ document.addEventListener("DOMContentLoaded", function() {
     const joinRoomButton    = document.getElementById('join-room');
     const roomNameInput     = document.getElementById('roomname');
     const createRoomButton  = document.getElementById('create-room');
-
+    // ルームタイプの選択要素を取得
+    const roomTypeSelect    = document.getElementById('room-type');
 
     // 新しいゲームを開始するボタンのクリックイベントリスナー
     newgameButton.addEventListener      ('click', startNewGame);
@@ -123,27 +124,30 @@ document.addEventListener("DOMContentLoaded", function() {
     // WebSocket接続を作成する関数
     function    createRoom() {
     const roomName = roomNameInput.value.trim(); // ルーム名を取得してトリム
+    const roomType = roomTypeSelect.value; // ユーザーが選択したルームタイプを取得
 
-     if (roomName !== '') {
-    fetch('/create-room', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ host: 'Your Host Name', room_type: 'public' }) // ホスト名とルームタイプを指定（適切な値に変更）
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.password) {
-            alert(`Generated Password: ${data.password}`);
-            console.log('Password:', data.password);
-        } else {
-            alert('Failed to generate room password');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error.message);
-    });
+    if (roomName !== '') {
+        fetch('/create-room', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ host: 'Your Host Name', room_type: roomType }) // ホスト名と選択したルームタイプを送信
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.password) {
+               // パブリックルームまたはプライベートルームかをログに出力
+               console.log(`Generated Password for ${roomType} room: ${data.password}`);
+               alert(`Generated Password for ${roomType} room: ${data.password}`);
+               console.log('Password:', data.password);
+            } else {
+                alert('Failed to generate room password');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error.message);
+        });
 } else {
     // ルーム名が空の場合はアラートを表示するなど、適切な処理を行う
     alert('ルーム名を入力してください。');

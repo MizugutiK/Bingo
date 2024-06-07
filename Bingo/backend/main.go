@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
@@ -158,7 +157,7 @@ func contains(numbers []int, number int) bool {
 type Room struct {
 	ID       string
 	Host     string
-	IsPublic bool
+	Type     string // ルームのタイプ (public or private)
 	Password string // パスワード
 	Clients  map[*websocket.Conn]bool
 	Mutex    sync.Mutex
@@ -174,24 +173,6 @@ func NewRoomManager() *RoomManager {
 	return &RoomManager{
 		Rooms: make(map[string]*Room),
 	}
-}
-
-// RoomManager構造体にルームを作成するための関数を追加
-func (rm *RoomManager) CreateRoom(host string, roomType string) string {
-	rm.Mutex.Lock()
-	defer rm.Mutex.Unlock()
-
-	password := generatePassword(PasswordLength) // パスワードを生成
-
-	room := &Room{
-		Host:     host,
-		IsPublic: roomType == PublicRoomType,
-		Password: password, // パブリックまたはプライベートを指定
-		Clients:  make(map[*websocket.Conn]bool),
-	}
-	// パスワードをキーとしてRoomを登録
-	rm.Rooms[password] = room
-	return password
 }
 
 // JoinRoom関数内でルームに参加する際にパスワードを検証する
@@ -222,22 +203,10 @@ func generatePassword(length int) string {
 
 // JoinRoomHandler 関数内でルームに参加する際にパスワードを検証する
 func JoinRoomHandler(w http.ResponseWriter, r *http.Request) {
-	// log.Println("JoinRoomHandler 関数通ってる")
-
-	// リクエストボディを読み取る前にログ出力
-	requestBody, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		log.Printf("Error リクエストボディ: %v", err)
-		http.Error(w, "Failed to read request body", http.StatusInternalServerError)
-		return
-	}
-
-	log.Printf("Request body: %s", string(requestBody))
-
 	var req struct {
 		Password string `json:"password"`
 	}
-	if err := json.Unmarshal(requestBody, &req); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("Error デコーディング: %v", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
@@ -283,11 +252,9 @@ func JoinRoomHandler(w http.ResponseWriter, r *http.Request) {
 
 // CreateRoomHandler関数内でルーム作成時に暗証番号を生成
 func CreateRoomHandler(w http.ResponseWriter, r *http.Request) {
-
 	var req struct {
 		Host     string `json:"host"`
 		RoomType string `json:"room_type"` // ルームのタイプをリクエストボディから取得
-
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -296,8 +263,16 @@ func CreateRoomHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	password := roomManager.CreateRoom(req.Host, req.RoomType)
-	log.Printf("CreateRoomHandler関数問題なし. Host: %s, Room ID: %s", req.Host, password)
+	var roomType string
+	switch req.RoomType {
+	case "public":
+		roomType = PublicRoomType
+	case "private":
+		roomType = PrivateRoomType
+	}
+
+	// ルームを作成し、生成されたパスワードを取得
+	password := roomManager.CreateRoom(req.Host, roomType)
 
 	// レスポンスにパスワードを含める
 	resp := map[string]string{
@@ -312,4 +287,25 @@ func CreateRoomHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+}
+
+// RoomManager構造体にルームを作成するための関数を追加
+func (rm *RoomManager) CreateRoom(host string, roomType string) string {
+	rm.Mutex.Lock()
+	defer rm.Mutex.Unlock()
+
+	password := generatePassword(PasswordLength) // パスワードを生成
+
+	room := &Room{
+		Host:     host,
+		Type:     roomType, // Change IsPublic to Type
+		Password: password,
+		Clients:  make(map[*websocket.Conn]bool),
+	}
+
+	// パスワードをキーとしてRoomを登録
+	rm.Rooms[password] = room
+	// ルームのタイプをログに出力
+	log.Printf("新しいルームが作成されました。Host: %s, ルームID: %s, ルームタイプ: %s", host, password, roomType)
+	return password
 }
