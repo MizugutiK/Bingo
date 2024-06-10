@@ -5,20 +5,21 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
 
-// WebSocketのアップグレーダー
+// WebSocketのアップグレーダー設定
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},
 }
 
-// WebSocket接続しているクライアント
+// WebSocket接続しているクライアントを保持するマップ
 var clients = make(map[*websocket.Conn]bool)
 
 // 生成されたビンゴの数字を保持するためのリスト
@@ -27,10 +28,14 @@ var generatedNumbers = make([]int, 0)
 // クライアントにメッセージを送信するためのチャネル
 var broadcast = make(chan []int)
 
-// ルーム管理
+// ルーム管理のためのインスタンス
 var roomManager = NewRoomManager()
 
+// 現在のWebSocket接続を保持する変数
 var ws *websocket.Conn
+
+// 数字生成の間隔を保持するグローバル変数
+var intervalSeconds int = 60
 
 func main() {
 	// 静的ファイルの配信
@@ -49,26 +54,28 @@ func main() {
 	// 新しいゲームを開始するエンドポイント
 	http.HandleFunc("/new-game", NewGameHandler)
 
-	// ハンドラーを登録
+	// ビンゴチェックのエンドポイント
 	http.HandleFunc("/check-bingo", CheckBingoHandler)
 
 	// 生成された数字のリストをリセットするエンドポイント
 	http.HandleFunc("/reset-generated-numbers", ResetGeneratedNumbersHandler)
 
-	// メッセージのハンドリング
+	// 数字生成間隔を設定するエンドポイント
+	http.HandleFunc("/set-interval", SetIntervalHandler)
+
+	// メッセージのハンドリングゴルーチンを開始
 	go handleMessages()
 
-	// 数字の生成
+	// 数字の生成ゴルーチンを開始
 	go generateNumbers()
 
-	// ログ出力
+	// サーバーの起動
 	log.Println("Listening on :8080...")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
-// WebSocket接続を処理する
+// WebSocket接続を処理する関数
 func handleConnections(w http.ResponseWriter, r *http.Request) {
-
 	// WebSocketのアップグレード
 	ws2, err := upgrader.Upgrade(w, r, nil)
 	ws = ws2
@@ -76,16 +83,14 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Fatalf("WebSocket upgrade error: %v", err)
 		http.Error(w, "handleConnections関数エラー", http.StatusInternalServerError)
+		return
 	}
 	log.Printf("新しい WebSocket 接続が確立: %s", ws.RemoteAddr())
-
-	// defer ws.Close()
 
 	// 接続されたクライアントを追加
 	clients[ws] = true
 
 	for {
-
 		// クライアントからのメッセージを読み取る（ここでは使用しない）
 		_, _, err := ws.ReadMessage()
 		if err != nil {
@@ -103,7 +108,7 @@ const (
 	PasswordLength  = 6 // 暗証番号の文字数
 )
 
-// メッセージを処理する
+// メッセージを処理するゴルーチン
 func handleMessages() {
 	for {
 		// メッセージを受信し、クライアントにブロードキャストする
@@ -124,8 +129,8 @@ func handleMessages() {
 // 数字を生成してブロードキャストする関数
 func generateNumbers() {
 	for {
-		// time.Sleep(10 * time.Second)
-		time.Sleep(1 * time.Minute)
+		// 設定された秒数ごとに新しい数字を生成
+		time.Sleep(time.Duration(intervalSeconds) * time.Second)
 
 		// 新しい数字を生成
 		newNumber := rand.Intn(75) + 1
@@ -258,25 +263,16 @@ func CreateRoomHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("CreateRoomHandler関数エラー: JSON decode error: %v", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Printf("Error デコーディング: %v", err)
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	var roomType string
-	switch req.RoomType {
-	case "public":
-		roomType = PublicRoomType
-	case "private":
-		roomType = PrivateRoomType
-	}
+	// ルームの作成
+	roomID := roomManager.CreateRoom(req.Host, req.RoomType)
 
-	// ルームを作成し、生成されたパスワードを取得
-	password := roomManager.CreateRoom(req.Host, roomType)
-
-	// レスポンスにパスワードを含める
 	resp := map[string]string{
-		"password": password,
+		"room_id": roomID,
 	}
 
 	// 正常なレスポンスを返す
@@ -298,7 +294,7 @@ func (rm *RoomManager) CreateRoom(host string, roomType string) string {
 
 	room := &Room{
 		Host:     host,
-		Type:     roomType, // Change IsPublic to Type
+		Type:     roomType, // ルームタイプを設定
 		Password: password,
 		Clients:  make(map[*websocket.Conn]bool),
 	}
@@ -308,4 +304,138 @@ func (rm *RoomManager) CreateRoom(host string, roomType string) string {
 	// ルームのタイプをログに出力
 	log.Printf("新しいルームが作成されました。Host: %s, ルームID: %s, ルームタイプ: %s", host, password, roomType)
 	return password
+}
+
+// NewGameHandlerは新しいビンゴゲームを開始し、ビンゴカードを生成してクライアントに返します
+func NewGameHandler(w http.ResponseWriter, r *http.Request) {
+	// ビンゴカードを生成
+	bingoCard := generateBingoCard()
+
+	// JSON形式でレスポンスを返す
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(bingoCard)
+}
+
+// CheckBingoHandlerはビンゴが達成されたかどうかをチェックします
+func CheckBingoHandler(w http.ResponseWriter, r *http.Request) {
+	// リクエストボディをデコード
+	var req struct {
+		Card   BingoCard  `json:"card"`
+		Marked [5][5]bool `json:"marked"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("Error decoding request: %v\n", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// ビンゴが達成されたかをチェック
+	isBingo := checkBingo(req.Card, req.Marked)
+
+	// レスポンスをJSON形式で返す
+	json.NewEncoder(w).Encode(map[string]bool{"bingo": isBingo})
+}
+
+// ResetGeneratedNumbersHandlerは生成された数字のリストをリセットします
+func ResetGeneratedNumbersHandler(w http.ResponseWriter, r *http.Request) {
+	generatedNumbers = []int{}
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Generated numbers have been reset"))
+}
+
+// SetIntervalHandlerは数字生成間隔を設定するハンドラーです
+func SetIntervalHandler(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Interval int `json:"interval"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("Error decoding request: %v\n", err)
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// 文字列から整数に変換
+	interval, err := strconv.Atoi(strconv.Itoa(req.Interval))
+	if err != nil {
+		log.Printf("Error converting interval to integer: %v\n", err)
+		http.Error(w, "Invalid interval value", http.StatusBadRequest)
+		return
+	}
+
+	if interval <= 0 {
+		http.Error(w, "Invalid interval value", http.StatusBadRequest)
+		return
+	}
+	intervalSeconds = interval
+	log.Printf("数字生成間隔が設定されました: %d秒", intervalSeconds)
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Interval has been set"))
+}
+
+// BingoCardはビンゴカードを表す型です
+type BingoCard [5][5]int
+
+// generateBingoCardは新しいビンゴカードを生成します
+func generateBingoCard() BingoCard {
+	rand.Seed(time.Now().UnixNano())
+
+	var card BingoCard
+	usedNumbers := make(map[int]bool)
+
+	// 5x5のビンゴカードを生成
+	for i := 0; i < 5; i++ {
+		for j := 0; j < 5; j++ {
+			num := rand.Intn(75) + 1
+			// 重複する数字を避ける
+			for usedNumbers[num] {
+				num = rand.Intn(75) + 1
+			}
+			usedNumbers[num] = true
+			card[i][j] = num
+		}
+	}
+
+	// 中央のセルはFREEとする
+	card[2][2] = 0
+	return card
+}
+
+// checkBingoはビンゴが達成されたかどうかをチェックします
+func checkBingo(card BingoCard, marked [5][5]bool) bool {
+	// 横方向のチェック
+	for i := 0; i < 5; i++ {
+		if marked[i][0] && marked[i][1] && marked[i][2] && marked[i][3] && marked[i][4] {
+			return true
+		}
+	}
+
+	// 縦方向のチェック
+	for j := 0; j < 5; j++ {
+		if marked[0][j] && marked[1][j] && marked[2][j] && marked[3][j] && marked[4][j] {
+			return true
+		}
+	}
+
+	// 斜め方向のチェック（左上から右下）
+	diagonal1 := true
+	for i := 0; i < 5; i++ {
+		if !marked[i][i] {
+			diagonal1 = false
+			break
+		}
+	}
+	if diagonal1 {
+		return true
+	}
+
+	// 斜め方向のチェック（右上から左下）
+	diagonal2 := true
+	for i := 0; i < 5; i++ {
+		if !marked[i][4-i] {
+			diagonal2 = false
+			break
+		}
+	}
+	return diagonal2
 }
