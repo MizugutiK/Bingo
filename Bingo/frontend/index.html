@@ -24,7 +24,11 @@
         
         <div class="d-grid gap-2 col-6 mx-auto">
              <button id="new-game" class="btn btn-light">ビンゴを始める</button>
-
+             
+             <label for="interval">数字生成の間隔（秒）:</label>
+             <input type="number" id="interval" name="interval" min="1" value="60">
+             <button id="set-interval-btn">更新</button>
+             
              <div id="CreateRoom">
                 <input type="text" id="roomname"> 
                 <button id="create-room" class="btn btn-light">ルームを作る</button>
