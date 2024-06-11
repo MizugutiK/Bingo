@@ -23,7 +23,7 @@ var upgrader = websocket.Upgrader{
 var clients = make(map[*websocket.Conn]bool)
 
 // 生成されたビンゴの数字を保持するためのリスト
-var generatedNumbers = make([]int, 0)
+// var generatedNumbers = make([]int, 0)
 
 // クライアントにメッセージを送信するためのチャネル
 var broadcast = make(chan []int)
@@ -36,6 +36,8 @@ var ws *websocket.Conn
 
 // 数字生成の間隔を保持するグローバル変数
 var intervalSeconds int = 5
+
+var numberGenerator = NewNumberGenerator()
 
 func main() {
 	// 静的ファイルの配信
@@ -136,27 +138,27 @@ func generateNumbers() {
 		newNumber := rand.Intn(75) + 1
 
 		// 生成されたことのない数字を探す
-		for contains(generatedNumbers, newNumber) {
+		for numberGenerator.Contains(newNumber) {
 			newNumber = rand.Intn(75) + 1
 		}
 
 		// 数字を保存
-		generatedNumbers = append(generatedNumbers, newNumber)
+		numberGenerator.AddNumber(newNumber)
 
 		// 生成された数字のリスト全体をクライアントにブロードキャスト
-		broadcast <- generatedNumbers
+		broadcast <- numberGenerator.GetNumbers()
 	}
 }
 
 // 指定された数字がリストに含まれているかどうかを確認する関数
-func contains(numbers []int, number int) bool {
-	for _, n := range numbers {
-		if n == number {
-			return true
-		}
-	}
-	return false
-}
+// func contains(numbers []int, number int) bool {
+// 	for _, n := range numbers {
+// 		if n == number {
+// 			return true
+// 		}
+// 	}
+// 	return false
+// }
 
 // Room構造体に暗証番号を追加
 type Room struct {
@@ -338,7 +340,7 @@ func CheckBingoHandler(w http.ResponseWriter, r *http.Request) {
 
 // ResetGeneratedNumbersHandlerは生成された数字のリストをリセットします
 func ResetGeneratedNumbersHandler(w http.ResponseWriter, r *http.Request) {
-	generatedNumbers = []int{}
+	numberGenerator.Reset()
 	response := map[string]string{"message": "Generated numbers have been reset"}
 	jsonResponse, err := json.Marshal(response)
 	if err != nil {
@@ -445,4 +447,49 @@ func checkBingo(card BingoCard, marked [5][5]bool) bool {
 		}
 	}
 	return diagonal2
+}
+
+type NumberGenerator struct {
+	numbers []int
+	mutex   sync.Mutex
+}
+
+// 新しい NumberGenerator を作成する関数
+func NewNumberGenerator() *NumberGenerator {
+	return &NumberGenerator{
+		numbers: make([]int, 0),
+	}
+}
+
+// 数字を追加するメソッド
+func (ng *NumberGenerator) AddNumber(number int) {
+	ng.mutex.Lock()
+	defer ng.mutex.Unlock()
+	ng.numbers = append(ng.numbers, number)
+}
+
+// 数字が含まれているかチェックするメソッド
+func (ng *NumberGenerator) Contains(number int) bool {
+	ng.mutex.Lock()
+	defer ng.mutex.Unlock()
+	for _, n := range ng.numbers {
+		if n == number {
+			return true
+		}
+	}
+	return false
+}
+
+// 生成された数字のリストを取得するメソッド
+func (ng *NumberGenerator) GetNumbers() []int {
+	ng.mutex.Lock()
+	defer ng.mutex.Unlock()
+	return ng.numbers
+}
+
+// 数字リストをリセットするメソッド
+func (ng *NumberGenerator) Reset() {
+	ng.mutex.Lock()
+	defer ng.mutex.Unlock()
+	ng.numbers = make([]int, 0)
 }
