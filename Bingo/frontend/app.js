@@ -62,10 +62,13 @@ function setupEventListeners() {
     window.addEventListener("resize", adjustAllCellFonts);
 }
 
+resetButton.style.display = 'none';
+
 // リセットボタンのクリックイベントリスナーを追加
 function resetGame() {
     clearInterval(countdownInterval);
     countdownDiv.textContent = '';
+    console.log('番号リセット');
     fetch('/reset-generated-numbers')
         .then(handleResponse)
         .then(() => {
@@ -74,9 +77,11 @@ function resetGame() {
             logDiv.innerHTML = '';
             countdownDiv.textContent = '';
             resetButton.style.display = 'none';
+            console.log('リセットできた');
         })
         .catch(handleError);
 }
+
 
 // ルームに参加する関数
 function joinRoom() {
@@ -136,7 +141,7 @@ function handleSetIntervalBtnClick() {
     .then(data => {
         console.log('Data received from /new-game:', data); // デバッグ用
         renderNewGame(data);
-        const interval = data.interval !== undefined ? data.interval : 30; // デフォルト値を設定
+        const interval = data.interval !== undefined ? data.interval : 1; // デフォルト値を設定
         startCountdown(interval); // カウントダウンを開始
     })
     .catch(handleError);
@@ -157,11 +162,13 @@ function handleSetIntervalBtnClick() {
                 console.log('Interval updated successfully', data);
                 startCountdown(newInterval); // インターバルが設定されたらカウントダウンを開始
                 generateNumbersEnabled = true; // ボタンがクリックされたら生成を有効化
+                resetGame(); // resetGame 関数を呼び出す
             } catch (error) {
                 if (text === 'Interval has been set') {
-                    console.log('Interval updated successfully');
+                    console.log('数字生成間隔更新');
                     startCountdown(newInterval); // インターバルが設定されたらカウントダウンを開始
                     generateNumbersEnabled = true; // ボタンがクリックされたら生成を有効化
+                    resetGame(); // resetGame 関数を呼び出す
                 } else {
                     throw new Error(`Invalid JSON response: ${text}`);
                 }
