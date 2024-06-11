@@ -35,7 +35,7 @@ var roomManager = NewRoomManager()
 var ws *websocket.Conn
 
 // 数字生成の間隔を保持するグローバル変数
-var intervalSeconds int = 60
+var intervalSeconds int = 30
 
 func main() {
 	// 静的ファイルの配信
@@ -339,8 +339,15 @@ func CheckBingoHandler(w http.ResponseWriter, r *http.Request) {
 // ResetGeneratedNumbersHandlerは生成された数字のリストをリセットします
 func ResetGeneratedNumbersHandler(w http.ResponseWriter, r *http.Request) {
 	generatedNumbers = []int{}
+	response := map[string]string{"message": "Generated numbers have been reset"}
+	jsonResponse, err := json.Marshal(response)
+	if err != nil {
+		http.Error(w, "Failed to generate JSON response", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Generated numbers have been reset"))
+	w.Write(jsonResponse)
 }
 
 // SetIntervalHandlerは数字生成間隔を設定するハンドラーです

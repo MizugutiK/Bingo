@@ -442,8 +442,3 @@ function handleResponse(response) {
     return response.json();
 }
 
-// // 共通のエラーハンドラー
-// function handleError(error) {
-//     console.error('Error:', error.message);
-//     alert(`Error: ${error.message}`);
-// }
