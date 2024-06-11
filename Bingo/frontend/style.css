@@ -97,3 +97,6 @@ body {
 .me-2 {
     margin-right: 0.5rem; /* Bootstrapのクラスを使ってボタン間にスペースを追加 */
 }
+#interval-label {
+    display: none;
+}
