@@ -35,7 +35,7 @@ var roomManager = NewRoomManager()
 var ws *websocket.Conn
 
 // 数字生成の間隔を保持するグローバル変数
-var intervalSeconds int = 30
+var intervalSeconds int = 5
 
 func main() {
 	// 静的ファイルの配信
