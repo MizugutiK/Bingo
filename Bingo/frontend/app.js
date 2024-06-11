@@ -55,7 +55,7 @@ const setIntervalBtn = document.getElementById('set-interval-btn');
 const intervalInput = document.getElementById('interval');
 // UI周りの表示非表示用の宣言
 const elementsToHide = document.querySelectorAll
-('#interval, #set-interval-btn, #CreateRoom, #join-room-container,#reset-game');
+('#interval, #set-interval-btn, #CreateRoom, #join-room-container,#reset-game,#interval-label');
 
 // ビンゴカードを非表示にする
 document.querySelector('.row.mt-2').style.display = 'none';
