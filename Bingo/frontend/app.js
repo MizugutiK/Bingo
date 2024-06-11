@@ -53,6 +53,12 @@ const createRoomButton = document.getElementById('create-room');
 const roomTypeSelect = document.getElementById('room-type');
 const setIntervalBtn = document.getElementById('set-interval-btn');
 const intervalInput = document.getElementById('interval');
+// UI周りの表示非表示用の宣言
+const elementsToHide = document.querySelectorAll
+('#interval, #set-interval-btn, #CreateRoom, #join-room-container,#reset-game');
+
+// ビンゴカードを非表示にする
+document.querySelector('.row.mt-2').style.display = 'none';
 
 function setupEventListeners() {
     resetButton.addEventListener('click', resetGame);
@@ -61,8 +67,6 @@ function setupEventListeners() {
     setIntervalBtn.addEventListener('click', handleSetIntervalBtnClick);
     window.addEventListener("resize", adjustAllCellFonts);
 }
-
-resetButton.style.display = 'none';
 
 // リセットボタンのクリックイベントリスナーを追加
 function resetGame() {
@@ -136,49 +140,57 @@ function createRoom() {
 
 // インターバル設定ボタンのクリックイベントリスナー
 function handleSetIntervalBtnClick() {
+    // インターバル設定ボタンがクリックされたら、特定の要素を非表示にする
+    elementsToHide.forEach(element => {
+        element.style.display = 'none';
+    });
+    // ビンゴカードを表示する
+    document.querySelector('.row.mt-2').style.display = 'block';
+
     fetch('/new-game')
-    .then(response => response.json())
-    .then(data => {
-        console.log('Data received from /new-game:', data); // デバッグ用
-        renderNewGame(data);
-        const interval = data.interval !== undefined ? data.interval : 1; // デフォルト値を設定
-        startCountdown(interval); // カウントダウンを開始
-    })
-    .catch(handleError);
+        .then(response => response.json())
+        .then(data => {
+            console.log('Data received from /new-game:', data); // デバッグ用
+            renderNewGame(data);
+            const interval = data.interval !== undefined ? data.interval : 1; // デフォルト値を設定
+            startCountdown(interval); // カウントダウンを開始
+        })
+        .catch(handleError);
     const newInterval = parseInt(intervalInput.value); // 新しいインターバル値を取得し、整数に変換
     if (!isNaN(newInterval) && newInterval > 0) { // 正しい数値かどうかを確認
         fetch('/set-interval', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ interval: newInterval }) // 正しい形式のJSONデータを送信
-        })
-        .then(response => response.text())
-        .then(text => {
-            // 受け取ったレスポンスがJSONかどうかを確認
-            try {
-                const data = JSON.parse(text);
-                console.log('Interval updated successfully', data);
-                startCountdown(newInterval); // インターバルが設定されたらカウントダウンを開始
-                generateNumbersEnabled = true; // ボタンがクリックされたら生成を有効化
-                resetGame(); // resetGame 関数を呼び出す
-            } catch (error) {
-                if (text === 'Interval has been set') {
-                    console.log('数字生成間隔更新');
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ interval: newInterval }) // 正しい形式のJSONデータを送信
+            })
+            .then(response => response.text())
+            .then(text => {
+                // 受け取ったレスポンスがJSONかどうかを確認
+                try {
+                    const data = JSON.parse(text);
+                    console.log('Interval updated successfully', data);
                     startCountdown(newInterval); // インターバルが設定されたらカウントダウンを開始
                     generateNumbersEnabled = true; // ボタンがクリックされたら生成を有効化
                     resetGame(); // resetGame 関数を呼び出す
-                } else {
-                    throw new Error(`Invalid JSON response: ${text}`);
+                } catch (error) {
+                    if (text === 'Interval has been set') {
+                        console.log('数字生成間隔更新');
+                        startCountdown(newInterval); // インターバルが設定されたらカウントダウンを開始
+                        generateNumbersEnabled = true; // ボタンがクリックされたら生成を有効化
+                        resetGame(); // resetGame 関数を呼び出す
+                    } else {
+                        throw new Error(`Invalid JSON response: ${text}`);
+                    }
                 }
-            }
-        })
-        .catch(handleError);
+            })
+            .catch(handleError);
     } else {
         console.error('Invalid interval value:', intervalInput.value);
     }
 }
+
 
 // 共通のエラーハンドラー
 function handleError(error) {
@@ -301,11 +313,7 @@ function renderNewGame(data) {
     startCountdown(data.interval); 
     generatedNumbers = data.generatedNumbers;
     enableClickableCells();
-    resetButton.style.display = 'none';
 
-    if (createRoomButton) {
-        createRoomButton.style.display = "none"; 
-    }
 }
 
 // カウントダウンを開始する関数
