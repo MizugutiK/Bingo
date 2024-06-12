@@ -22,9 +22,6 @@ var upgrader = websocket.Upgrader{
 // WebSocket接続しているクライアントを保持するマップ
 var clients = make(map[*websocket.Conn]bool)
 
-// 生成されたビンゴの数字を保持するためのリスト
-// var generatedNumbers = make([]int, 0)
-
 // クライアントにメッセージを送信するためのチャネル
 var broadcast = make(chan []int)
 
@@ -150,26 +147,24 @@ func generateNumbers() {
 	}
 }
 
-// 指定された数字がリストに含まれているかどうかを確認する関数
-// func contains(numbers []int, number int) bool {
-// 	for _, n := range numbers {
-// 		if n == number {
-// 			return true
-// 		}
-// 	}
-// 	return false
-// }
-
-// Room構造体に暗証番号を追加
 type Room struct {
-	ID       string
-	Host     string
-	Type     string // ルームのタイプ (public or private)
-	Password string // パスワード
-	Clients  map[*websocket.Conn]bool
-	Mutex    sync.Mutex
+	ID              string
+	Host            string
+	Type            string // ルームのタイプ (public or private)
+	Password        string // パスワード
+	Clients         map[*websocket.Conn]bool
+	Mutex           sync.Mutex
+	BingoGame       *BingoGame                     // ビンゴゲームの状態
+	UserBingoCards  map[*websocket.Conn]BingoCard  // ユーザーごとのビンゴカード
+	BingoCardMarked map[*websocket.Conn][5][5]bool // ユーザーごとのビンゴカードのマーク状態
+	BingoCard       BingoCard                      // ビンゴカード
 }
 
+// BingoGame 構造体を追加して、ビンゴゲームの状態を管理します
+type BingoGame struct {
+	GeneratedNumbers []int // 生成された数字のリスト
+	IsBingo          bool  // ビンゴが達成されたかどうか
+}
 type RoomManager struct {
 	Rooms map[string]*Room
 	Mutex sync.Mutex
@@ -385,7 +380,7 @@ func SetIntervalHandler(w http.ResponseWriter, r *http.Request) {
 // BingoCardはビンゴカードを表す型です
 type BingoCard [5][5]int
 
-// generateBingoCardは新しいビンゴカードを生成します
+// generateBingoCard 関数の最後にリターンステートメントを追加する
 func generateBingoCard() BingoCard {
 	rand.Seed(time.Now().UnixNano())
 
@@ -407,7 +402,8 @@ func generateBingoCard() BingoCard {
 
 	// 中央のセルはFREEとする
 	card[2][2] = 0
-	return card
+
+	return card // 追加
 }
 
 // checkBingoはビンゴが達成されたかどうかをチェックします
@@ -492,4 +488,67 @@ func (ng *NumberGenerator) Reset() {
 	ng.mutex.Lock()
 	defer ng.mutex.Unlock()
 	ng.numbers = make([]int, 0)
+}
+
+// 新しいゲームを開始する関数
+func startNewGame(room *Room) {
+	// ビンゴカードを生成
+	room.BingoCard = generateBingoCard()
+
+	// ビンゴゲームの状態をリセット
+	room.BingoGame = &BingoGame{
+		GeneratedNumbers: make([]int, 0),
+		IsBingo:          false,
+	}
+
+	// 新しいゲームの開始をクライアントに通知
+	broadcastGameState(room)
+}
+
+// 各ルームに参加しているクライアントに、そのルームのビンゴゲームの状態を送信する関数
+func broadcastGameState(room *Room) {
+	// ビンゴゲームの状態をクライアントに送信
+	gameState := map[string]interface{}{
+		"bingo_card":        room.BingoCard,
+		"bingo_card_marked": room.BingoCardMarked,
+		"generated_numbers": room.BingoGame.GeneratedNumbers,
+		"is_bingo":          room.BingoGame.IsBingo,
+	}
+
+	for client := range room.Clients {
+		err := client.WriteJSON(gameState)
+		if err != nil {
+			log.Printf("WebSocket write error: %v", err)
+			client.Close()
+			delete(room.Clients, client)
+		}
+	}
+}
+
+// ユーザーごとのビンゴカードを生成し、部屋に参加している各ユーザーに割り当てます
+func generateUserBingoCard(room *Room, ws *websocket.Conn) {
+	rand.Seed(time.Now().UnixNano())
+
+	var card BingoCard
+	usedNumbers := make(map[int]bool)
+
+	// 5x5のビンゴカードを生成
+	for i := 0; i < 5; i++ {
+		for j := 0; j < 5; j++ {
+			num := rand.Intn(75) + 1
+			// 重複する数字を避ける
+			for usedNumbers[num] {
+				num = rand.Intn(75) + 1
+			}
+			usedNumbers[num] = true
+			card[i][j] = num
+		}
+	}
+
+	// 中央のセルはFREEとする
+	card[2][2] = 0
+
+	// ユーザーごとのビンゴカードを更新
+	room.UserBingoCards[ws] = card
+	room.BingoCardMarked[ws] = [5][5]bool{} // マークされた状態も初期化する必要があります
 }
