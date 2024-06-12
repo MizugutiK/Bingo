@@ -179,14 +179,14 @@ func generateNumbers() {
 type Room struct {
 	ID              string
 	Host            string
-	Type            string // ルームのタイプ (public or private)
-	Password        string // パスワード
+	Type            string
+	Password        string // Added Password field
 	Clients         map[*websocket.Conn]bool
 	Mutex           sync.Mutex
-	BingoGame       *BingoGame                     // ビンゴゲームの状態
-	UserBingoCards  map[*websocket.Conn]BingoCard  // ユーザーごとのビンゴカード
-	BingoCardMarked map[*websocket.Conn][5][5]bool // ユーザーごとのビンゴカードのマーク状態
-	BingoCard       BingoCard                      // ビンゴカード
+	BingoGame       *BingoGame
+	UserBingoCards  map[*websocket.Conn]BingoCard
+	BingoCardMarked map[*websocket.Conn][5][5]bool
+	BingoCard       BingoCard
 }
 
 // BingoGame 構造体を追加して、ビンゴゲームの状態を管理します
@@ -232,18 +232,19 @@ func generatePassword(length int) string {
 	return string(b)
 }
 
-// JoinRoomHandler 関数内でルームに参加する際にパスワードを検証する
+// JoinRoomHandler 関数内でビンゴゲームの状態をクライアントに送信
 func JoinRoomHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Password string `json:"password"`
 	}
+
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("Error デコーディング: %v", err)
+		log.Printf("Error decoding: %v", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	// パスワードを使用してルームを特定
+	// Join the room
 	var room *Room
 	var roomID string
 	for id, r := range roomManager.Rooms {
@@ -254,28 +255,31 @@ func JoinRoomHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if room == nil {
-		log.Printf("パスワード: %s", req.Password)
+		log.Printf("Invalid password: %s", req.Password)
 		http.Error(w, "Invalid password", http.StatusForbidden)
 		return
 	}
 
-	// ルームにクライアントを参加させる
+	// Add the client to the room
 	success := roomManager.JoinRoom(roomID, ws)
 	if !success {
-		log.Printf("ルーム参加できてない: %s", roomID)
+		log.Printf("Failed to join room: %s", roomID)
 		http.Error(w, "Failed to join room", http.StatusInternalServerError)
 		return
 	}
 
-	// 参加が成功した場合は、クライアントにルームIDを返す
+	// Broadcast the bingo game state to the client
+	broadcastGameState(room)
+
+	// Response
 	resp := map[string]string{
 		"room_id": roomID,
 	}
-	// 正常なレスポンスを返す
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		log.Printf("JoinRoomHandler関数エラー: JSON encode error: %v", err)
+		log.Printf("Error encoding: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -285,11 +289,11 @@ func JoinRoomHandler(w http.ResponseWriter, r *http.Request) {
 func CreateRoomHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Host     string `json:"host"`
-		RoomType string `json:"room_type"` // ルームのタイプをリクエストボディから取得
+		RoomType string `json:"room_type"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("Error デコーディング: %v", err)
+		log.Printf("Error decoding: %v", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -297,15 +301,19 @@ func CreateRoomHandler(w http.ResponseWriter, r *http.Request) {
 	// ルームの作成
 	roomID := roomManager.CreateRoom(req.Host, req.RoomType)
 
+	// ルームの初期化
+	room := roomManager.Rooms[roomID]
+	startNewGame(room) // ビンゴゲームを開始
+
+	// レスポンスを返す
 	resp := map[string]string{
 		"room_id": roomID,
 	}
 
-	// 正常なレスポンスを返す
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		log.Printf("CreateRoomHandler関数エラー: JSON encode error: %v", err)
+		log.Printf("Error encoding: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -561,11 +569,11 @@ func generateUserBingoCard(room *Room, ws *websocket.Conn) {
 	var card BingoCard
 	usedNumbers := make(map[int]bool)
 
-	// 5x5のビンゴカードを生成
+	// Generate a 5x5 bingo card
 	for i := 0; i < 5; i++ {
 		for j := 0; j < 5; j++ {
 			num := rand.Intn(75) + 1
-			// 重複する数字を避ける
+			// Avoid duplicate numbers
 			for usedNumbers[num] {
 				num = rand.Intn(75) + 1
 			}
@@ -574,10 +582,10 @@ func generateUserBingoCard(room *Room, ws *websocket.Conn) {
 		}
 	}
 
-	// 中央のセルはFREEとする
+	// Middle cell is FREE
 	card[2][2] = 0
 
-	// ユーザーごとのビンゴカードを更新
+	// Update user bingo cards for the room
 	room.UserBingoCards[ws] = card
-	room.BingoCardMarked[ws] = [5][5]bool{} // マークされた状態も初期化する必要があります
+	room.BingoCardMarked[ws] = [5][5]bool{} // Initialize marked state as well
 }
