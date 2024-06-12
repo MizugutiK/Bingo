@@ -20,7 +20,8 @@ var upgrader = websocket.Upgrader{
 }
 
 // WebSocket接続しているクライアントを保持するマップ
-var clients = make(map[*websocket.Conn]bool)
+var clientsMu sync.Mutex
+var clients []*websocket.Conn
 
 // クライアントにメッセージを送信するためのチャネル
 var broadcast = make(chan []int)
@@ -78,23 +79,34 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	// WebSocketのアップグレード
 	ws2, err := upgrader.Upgrade(w, r, nil)
 	ws = ws2
-
 	if err != nil {
 		log.Fatalf("WebSocket upgrade error: %v", err)
-		http.Error(w, "handleConnections関数エラー", http.StatusInternalServerError)
+		http.Error(w, "WebSocket upgrade error", http.StatusInternalServerError)
 		return
 	}
-	log.Printf("新しい WebSocket 接続が確立: %s", ws.RemoteAddr())
+	defer ws.Close()
 
 	// 接続されたクライアントを追加
-	clients[ws] = true
+	clientsMu.Lock()
+	clients = append(clients, ws)
+	clientsMu.Unlock()
 
+	log.Printf("新しい WebSocket 接続が確立: %s", ws.RemoteAddr())
+
+	// クライアントからのメッセージを読み取る（ここでは使用しない）
 	for {
-		// クライアントからのメッセージを読み取る（ここでは使用しない）
 		_, _, err := ws.ReadMessage()
 		if err != nil {
 			log.Printf("接続切れた: %v", err)
-			delete(clients, ws)
+			// 接続が切れたらクライアントを削除
+			clientsMu.Lock()
+			for i, client := range clients {
+				if client == ws {
+					clients = append(clients[:i], clients[i+1:]...)
+					break
+				}
+			}
+			clientsMu.Unlock()
 			break
 		}
 	}
@@ -111,16 +123,25 @@ const (
 func handleMessages() {
 	for {
 		// メッセージを受信し、クライアントにブロードキャストする
-		number := <-broadcast
-		for client := range clients {
-			err := client.WriteJSON(number)
+		numbers := <-broadcast
+
+		for _, client := range clients {
+			err := client.WriteJSON(numbers)
 			if err != nil {
 				log.Printf("WebSocket write error: %v", err)
-				client.Close()
-				delete(clients, client)
+				// 接続が切れたらクライアントを削除
+				clientsMu.Lock()
+				for i, c := range clients {
+					if c == client {
+						log.Printf("クライアントを削除: %s", client.RemoteAddr())
+						clients = append(clients[:i], clients[i+1:]...)
+						break
+					}
+				}
+				clientsMu.Unlock()
 			}
 			// 送信データをログに出力
-			log.Printf("Sent data: %v", number)
+			log.Printf("Sent data: %v", numbers)
 		}
 	}
 }
@@ -128,9 +149,6 @@ func handleMessages() {
 // 数字を生成してブロードキャストする関数
 func generateNumbers() {
 	for {
-		// 設定された秒数ごとに新しい数字を生成
-		time.Sleep(time.Duration(intervalSeconds) * time.Second)
-
 		// 新しい数字を生成
 		newNumber := rand.Intn(75) + 1
 
@@ -144,6 +162,12 @@ func generateNumbers() {
 
 		// 生成された数字のリスト全体をクライアントにブロードキャスト
 		broadcast <- numberGenerator.GetNumbers()
+
+		// 生成された数字をログに出力
+		log.Printf("Sent data: [%d]", newNumber)
+
+		// 数字生成の間隔待ち
+		time.Sleep(time.Duration(intervalSeconds) * time.Second)
 	}
 }
 
