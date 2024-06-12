@@ -91,7 +91,8 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	clients = append(clients, ws)
 	clientsMu.Unlock()
 
-	log.Printf("新しい WebSocket 接続が確立: %s", ws.RemoteAddr())
+	// 現在の接続数をログに出力
+	log.Printf("新しい WebSocket 接続が確立: %s, 現在の接続数: %d", ws.RemoteAddr(), len(clients))
 
 	// クライアントからのメッセージを読み取る（ここでは使用しない）
 	for {
@@ -107,6 +108,10 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			clientsMu.Unlock()
+
+			// 現在の接続数をログに出力
+			log.Printf("クライアントが切断されました。現在の接続数: %d", len(clients))
+
 			break
 		}
 	}
