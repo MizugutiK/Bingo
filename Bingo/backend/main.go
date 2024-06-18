@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
+	"fmt"
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -21,12 +24,7 @@ var upgrader = websocket.Upgrader{
 
 // WebSocket接続しているクライアントを保持するマップ
 var clients = make(map[*websocket.Conn]bool)
-
-// 生成されたビンゴの数字を保持するためのリスト
 var generatedNumbers = make([]int, 0)
-
-// クライアントにメッセージを送信するためのチャネル
-var broadcast = make(chan []int)
 
 // ルーム管理のためのインスタンス
 var roomManager = NewRoomManager()
@@ -34,42 +32,32 @@ var roomManager = NewRoomManager()
 // 現在のWebSocket接続を保持する変数
 var ws *websocket.Conn
 
-// 数字生成の間隔を保持するグローバル変数
-var intervalSeconds = 5
+// // 数字生成の間隔を保持するグローバル変数
+// var intervalSeconds = 1
 
 func main() {
 	// 静的ファイルの配信
 	http.Handle("/", http.FileServer(http.Dir("./frontend")))
-
 	// WebSocketエンドポイント
 	http.HandleFunc("/ws", handleConnections)
-
 	// ルーム作成エンドポイント
 	http.HandleFunc("/create-room", CreateRoomHandler)
-
 	// ルームに参加するエンドポイント
 	http.HandleFunc("/join-room", JoinRoomHandler)
-
 	// 新しいゲームを開始するエンドポイント
 	http.HandleFunc("/new-game", NewGameHandler)
-
 	// ビンゴチェックのエンドポイント
 	http.HandleFunc("/check-bingo", CheckBingoHandler)
-
 	// 生成された数字のリストをリセットするエンドポイント
 	http.HandleFunc("/reset-generated-numbers", ResetGeneratedNumbersHandler)
-
 	// 数字生成間隔を設定するエンドポイント
 	http.HandleFunc("/set-interval", SetIntervalHandler)
-
-	// メッセージのハンドリングゴルーチンを開始
-	go handleMessages()
-
-	// 数字の生成ゴルーチンを開始
-	go generateNumbers()
+	// ルームごとの数字取得エンドポイント
+	http.HandleFunc("/get-room-numbers", GetRoomNumbersHandler)
 
 	// サーバーの起動
 	log.Println("Listening on :8080...")
+	go generateAndWriteNumbersToFiles() // 数字生成のゴルーチンを起動
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
@@ -77,16 +65,36 @@ func main() {
 func handleConnections(w http.ResponseWriter, r *http.Request) {
 	// WebSocketのアップグレード
 	ws2, err := upgrader.Upgrade(w, r, nil)
+	ws = ws2
 	if err != nil {
-		log.Fatalf("WebSocket upgrade error: %v", err)
-		http.Error(w, "WebSocket upgrade error", http.StatusInternalServerError)
+		log.Fatalf("handleConnections関数WebSocket アップグレード エラー: %v", err)
+		http.Error(w, "WebSocket アップグレード エラー", http.StatusInternalServerError)
 		return
 	}
-	ws = ws2
-	log.Printf("新しい WebSocket 接続が確立: %s", ws.RemoteAddr())
+
+	// 初回メッセージでルーム名とパスワードを受け取る
+	var req struct {
+		RoomName string `json:"room_name"`
+		Password string `json:"password"`
+	}
+	if err := ws.ReadJSON(&req); err != nil {
+		log.Printf("handleConnections関数初回メッセージの読み取りエラー: %v", err)
+		ws.Close()
+		return
+	}
+
+	// ルームに参加
+	success := roomManager.JoinRoom(req.Password, ws)
+	if !success {
+		log.Printf("handleConnections関数部屋に参加できませんでした: %s", req.Password)
+		ws.Close()
+		return
+	}
 
 	// 接続されたクライアントを追加
 	clients[ws] = true
+
+	log.Printf("新しい WebSocket 接続が確立: %s", ws.RemoteAddr())
 
 	// クライアントからのメッセージを待機するループ
 	for {
@@ -99,30 +107,98 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// メッセージを処理するゴルーチン
-func handleMessages() {
-	for {
-		// メッセージを受信し、クライアントにブロードキャストする
-		number := <-broadcast
-		for client := range clients {
-			err := client.WriteJSON(number)
-			if err != nil {
-				log.Printf("WebSocket write error: %v", err)
-				client.Close()
-				delete(clients, client)
-			}
-			log.Printf("Sent data: %v", number)
-		}
+// ルーム作成関数
+func CreateRoomHandler(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		RoomName string `json:"room_name"`
+		RoomType string `json:"room_type"`
 	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("CreateRoomHandler関数リクエストのデコードエラー: %v", err)
+		http.Error(w, "リクエスト本文が無効です", http.StatusBadRequest)
+		return
+	}
+
+	// roomManager.CreateRoom はパスワードのみを返す
+	password := roomManager.CreateRoom(req.RoomName, req.RoomType)
+	if password == "" {
+		log.Printf("CreateRoomHandler関数部屋の作成に失敗しました")
+		http.Error(w, "部屋の作成に失敗しました", http.StatusInternalServerError)
+		return
+	}
+
+	// ログに出力して確認
+	log.Printf("CreateRoomHandler関数 Room Name: %s, Password: %s", req.RoomName, password)
+
+	resp := map[string]string{
+		"password": password,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
 }
 
-// 数字を生成してブロードキャストする関数
-func generateNumbers() {
+// ルームごとの数字を取得するハンドラー関数
+func GetRoomNumbersHandler(w http.ResponseWriter, r *http.Request) {
+	// リクエストからルーム名とパスワードを取得
+	roomName := r.URL.Query().Get("room_name")
+	password := r.URL.Query().Get("password")
+
+	// 対応するテキストファイルから数字を取得
+	fileName := fmt.Sprintf("%s_%s.txt", roomName, password)
+	numbers, err := readNumbersFromFile(fileName)
+	if err != nil {
+		log.Printf("GetRoomNumbersHandler関数ファイルの読み込みに失敗しました: %v", err)
+		http.Error(w, "数字の読み取りに失敗しました", http.StatusInternalServerError)
+		return
+	}
+
+	// クライアントに数字を返す
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(numbers)
+}
+
+// テキストファイルから数字を読み取る関数
+func readNumbersFromFile(fileName string) ([]int, error) {
+	var numbers []int
+
+	file, err := os.Open(fileName)
+	if err != nil {
+		return numbers, err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		num, err := strconv.Atoi(scanner.Text())
+		if err != nil {
+			return numbers, err
+		}
+		numbers = append(numbers, num)
+	}
+
+	return numbers, nil
+}
+
+// 数字を生成してテキストファイルに書き込む関数
+func generateAndWriteNumbersToFiles() {
 	for {
-		time.Sleep(time.Duration(intervalSeconds) * time.Second)
 		newNumber := generateUniqueNumber()
-		generatedNumbers = append(generatedNumbers, newNumber)
-		broadcast <- generatedNumbers
+
+		// すべてのルームのファイルに数字を書き込む
+		for _, room := range roomManager.Rooms {
+			fileName := fmt.Sprintf("%s_%s.txt", room.RoomName, room.Password)
+			file, err := os.OpenFile(fileName, os.O_APPEND|os.O_WRONLY, 0644)
+			if err != nil {
+				log.Printf("ファイルのオープンに失敗しました: %v", err)
+				continue
+			}
+
+			if _, err := file.WriteString(fmt.Sprintf("%d\n", newNumber)); err != nil {
+				log.Printf("ファイルへの書き込みに失敗しました: %v", err)
+			}
+
+			file.Close() // ファイルの使用が終わったら明示的にクローズする
+		}
 	}
 }
 
@@ -132,6 +208,7 @@ func generateUniqueNumber() int {
 	for contains(generatedNumbers, newNumber) {
 		newNumber = rand.Intn(75) + 1
 	}
+	generatedNumbers = append(generatedNumbers, newNumber)
 	return newNumber
 }
 
@@ -155,7 +232,7 @@ const (
 // Room構造体
 type Room struct {
 	ID       string
-	Host     string
+	RoomName string
 	Type     string
 	Password string
 	Clients  map[*websocket.Conn]bool
@@ -185,9 +262,11 @@ func (rm *RoomManager) JoinRoom(password string, ws *websocket.Conn) bool {
 		return false
 	}
 
-	room.Mutex.Lock()
-	defer room.Mutex.Unlock()
-	room.Clients[ws] = true
+	if ws != nil {
+		room.Mutex.Lock()
+		defer room.Mutex.Unlock()
+		room.Clients[ws] = true
+	}
 	return true
 }
 
@@ -202,84 +281,98 @@ func generatePassword(length int) string {
 }
 
 // ルーム作成関数
-func (rm *RoomManager) CreateRoom(host string, roomType string) string {
+func (rm *RoomManager) CreateRoom(roomName string, roomType string) string {
 	rm.Mutex.Lock()
 	defer rm.Mutex.Unlock()
 
 	password := generatePassword(PasswordLength)
 	room := &Room{
-		Host:     host,
+		RoomName: roomName,
 		Type:     roomType,
 		Password: password,
 		Clients:  make(map[*websocket.Conn]bool),
 	}
 
 	rm.Rooms[password] = room
-	log.Printf("新しいルームが作成されました。Host: %s, ルームID: %s, ルームタイプ: %s", host, password, roomType)
+
+	// ルーム名とパスワードを使ってテキストファイルを生成
+	fileName := fmt.Sprintf("%s_%s.txt", roomName, password)
+	file, err := os.Create(fileName)
+	if err != nil {
+		log.Printf("ファイルの生成に失敗しました: %v", err)
+		return ""
+	}
+	defer file.Close()
+	log.Printf("新しいルームが作成されました. Room Name: %s, Password: %s", roomName, password)
+
 	return password
+}
+
+// パスワードに基づいてルームを取得する関数
+func (rm *RoomManager) GetRoomByPassword(password string) *Room {
+	rm.Mutex.Lock()
+	defer rm.Mutex.Unlock()
+
+	return rm.Rooms[password]
 }
 
 // ルームに参加するためのハンドラー関数
 func JoinRoomHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct {
+		RoomName string `json:"room_name"`
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("Error decoding request: %v", err)
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		log.Printf("JoinRoomHandler関数リクエストのデコードエラー: %v", err)
+		http.Error(w, "リクエスト本文が無効です", http.StatusBadRequest)
+		return
+	}
+	// ルーム名をログに出力
+	log.Printf("JoinRoomHandler関数 Room Name: %s, Password: %s", req.RoomName, req.Password)
+
+	// 部屋に参加する
+	success := roomManager.JoinRoom(req.Password, nil)
+	if !success {
+		log.Printf("JoinRoomHandler関数部屋に参加できませんでした: %s", req.Password)
+		http.Error(w, "部屋に参加できませんでした", http.StatusInternalServerError)
 		return
 	}
 
-	var room *Room
-	var roomID string
-	for id, r := range roomManager.Rooms {
-		if r.Password == req.Password {
-			room = r
-			roomID = id
-			break
+	// ビンゴカードデータを生成
+	bingoCard := generateBingoCard()
+
+	// BingoCard型を[][]interface{}型に変換
+	convertedCard := make([][]interface{}, 5)
+	for i := range bingoCard {
+		convertedCard[i] = make([]interface{}, 5)
+		for j := range bingoCard[i] {
+			if bingoCard[i][j] == 0 {
+				convertedCard[i][j] = "FREE"
+			} else {
+				convertedCard[i][j] = bingoCard[i][j]
+			}
 		}
 	}
-	if room == nil {
-		log.Printf("Invalid password: %s", req.Password)
-		http.Error(w, "Invalid password", http.StatusForbidden)
-		return
+
+	// レスポンスデータを構造体に格納
+	response := struct {
+		Card     [][]interface{} `json:"card"`
+		Interval int             `json:"interval"`
+	}{
+		Card:     convertedCard,
+		Interval: 10, // 例として10秒のインターバルを設定
 	}
 
-	success := roomManager.JoinRoom(roomID, ws)
-	if !success {
-		log.Printf("Failed to join room: %s", roomID)
-		http.Error(w, "Failed to join room", http.StatusInternalServerError)
-		return
-	}
-
-	resp := map[string]string{
-		"room_id": roomID,
-	}
+	// レスポンスをJSON形式で送信
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("JoinRoomHandler関数レスポンスのエンコードエラー: %v", err)
+		http.Error(w, "レスポンスのエンコードに失敗しました", http.StatusInternalServerError)
+		return
+	}
 }
 
-// ルーム作成ハンドラー関数
-func CreateRoomHandler(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Host     string `json:"host"`
-		RoomType string `json:"room_type"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("Error decoding request: %v", err)
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	roomID := roomManager.CreateRoom(req.Host, req.RoomType)
-	resp := map[string]string{
-		"room_id": roomID,
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
-}
-
-// 新しいゲームを開始するハンドラー関数
+// ビンゴカードを生成するハンドラー関数
 func NewGameHandler(w http.ResponseWriter, r *http.Request) {
 	bingoCard := generateBingoCard()
 	w.Header().Set("Content-Type", "application/json")
@@ -293,8 +386,8 @@ func CheckBingoHandler(w http.ResponseWriter, r *http.Request) {
 		Marked [5][5]bool `json:"marked"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("Error decoding request: %v", err)
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		log.Printf("リクエストのデコードエラー: %v", err)
+		http.Error(w, "リクエスト本文が無効です", http.StatusBadRequest)
 		return
 	}
 
@@ -307,10 +400,10 @@ func CheckBingoHandler(w http.ResponseWriter, r *http.Request) {
 // 生成された数字のリストをリセットするハンドラー関数
 func ResetGeneratedNumbersHandler(w http.ResponseWriter, r *http.Request) {
 	generatedNumbers = []int{}
-	response := map[string]string{"message": "Generated numbers have been reset"}
+	response := map[string]string{"message": "生成された番号はリセットされました"}
 	jsonResponse, err := json.Marshal(response)
 	if err != nil {
-		http.Error(w, "Failed to generate JSON response", http.StatusInternalServerError)
+		http.Error(w, "JSON 応答の生成に失敗しました", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -324,20 +417,20 @@ func SetIntervalHandler(w http.ResponseWriter, r *http.Request) {
 		Interval int `json:"interval"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("Error decoding request: %v", err)
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		log.Printf("SetIntervalHandler関数リクエストのデコードエラー: %v", err)
+		http.Error(w, "リクエスト本文が無効です", http.StatusBadRequest)
 		return
 	}
 
 	interval, err := strconv.Atoi(strconv.Itoa(req.Interval))
 	if err != nil || interval <= 0 {
-		log.Printf("Invalid interval value: %v\n", err)
-		http.Error(w, "Invalid interval value", http.StatusBadRequest)
+		log.Printf("SetIntervalHandler関数 無効な間隔値: %v\n", err)
+		http.Error(w, "無効な間隔値", http.StatusBadRequest)
 		return
 	}
 
-	intervalSeconds = interval
-	log.Printf("数字生成間隔が設定されました: %d秒", intervalSeconds)
+	// intervalSeconds = interval
+	// log.Printf("数字生成間隔が設定されました: %d秒", intervalSeconds)
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Interval has been set"))
 }

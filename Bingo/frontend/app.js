@@ -54,8 +54,7 @@ const roomTypeSelect = document.getElementById('room-type');
 const setIntervalBtn = document.getElementById('set-interval-btn');
 const intervalInput = document.getElementById('interval');
 // UI周りの表示非表示用の宣言
-const elementsToHide = document.querySelectorAll
-('#interval, #set-interval-btn, #CreateRoom, #join-room-container,#reset-game,#interval-label');
+const elementsToHide = document.querySelectorAll('#interval, #set-interval-btn, #CreateRoom, #join-room-container,#reset-game,#interval-label');
 
 // ビンゴカードを非表示にする
 document.querySelector('.row.mt-2').style.display = 'none';
@@ -86,12 +85,11 @@ function resetGame() {
         .catch(handleError);
 }
 
-
 // ルームに参加する関数
 function joinRoom() {
     const roomName = roomNameInput.value.trim();
     const password = document.getElementById('room-password').value;
-    console.log('Password:', password); // パスワードをログに出力
+    console.log('Room Name:', roomName); // デバッグ用ログ
 
     // ルーム名をブラウザ上に表示
     roomNameDisplay.textContent = `ルーム名: ${roomName}`;
@@ -101,16 +99,19 @@ function joinRoom() {
         headers: {
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ password: password })
+        body: JSON.stringify({ room_name: roomName, password: password }) // ルーム名をリクエストに含める
     })
+    .then(handleResponse)
     .then(handleJoinRoomResponse)
     .catch(handleJoinRoomError);
 }
 
-// WebSocket接続を作成する関数
+// ルーム作成リクエストをサーバーに送信
 function createRoom() {
-    const roomName = roomNameInput.value.trim(); // ルーム名を取得してトリム
-    const roomType = roomTypeSelect.value; // ユーザーが選択したルームタイプを取得
+    const roomName = roomNameInput.value.trim();
+    const roomType = roomTypeSelect.value;
+
+    console.log('Room Name:', roomName); // デバッグ用ログ
 
     if (roomName !== '') {
         fetch('/create-room', {
@@ -118,86 +119,79 @@ function createRoom() {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ host: 'Your Host Name', room_type: roomType }) // ホスト名と選択したルームタイプを送信
+            body: JSON.stringify({ room_name: roomName, room_type: roomType }) // ルーム名をリクエストに含める
         })
         .then(response => response.json())
         .then(data => {
             if (data.password) {
-                // パブリックルームまたはプライベートルームかをログに出力
                 console.log(`Generated Password for ${roomType} room: ${data.password}`);
                 alert(`Generated Password for ${roomType} room: ${data.password}`);
-                console.log('Password:', data.password);
             } else {
                 alert('Failed to generate room password');
             }
         })
         .catch(handleError);
     } else {
-        // ルーム名が空の場合はアラートを表示するなど、適切な処理を行う
         alert('ルーム名を入力してください。');
     }
 }
 
+
 // インターバル設定ボタンのクリックイベントリスナー
 function handleSetIntervalBtnClick() {
-    // インターバル設定ボタンがクリックされたら、特定の要素を非表示にする
     elementsToHide.forEach(element => {
         element.style.display = 'none';
     });
-    // ビンゴカードを表示する
     document.querySelector('.row.mt-2').style.display = 'block';
 
     fetch('/new-game')
         .then(response => response.json())
         .then(data => {
-            console.log('Data received from /new-game:', data); // デバッグ用
-            renderNewGame(data);
-            const interval = data.interval !== undefined ? data.interval : 1; // デフォルト値を設定
-            startCountdown(interval); // カウントダウンを開始
+            renderBingoCard(data);
+            const interval = data.interval !== undefined ? data.interval : 1;
+            startCountdown(interval);
         })
         .catch(handleError);
-    const newInterval = parseInt(intervalInput.value); // 新しいインターバル値を取得し、整数に変換
-    if (!isNaN(newInterval) && newInterval > 0) { // 正しい数値かどうかを確認
+
+    const newInterval = parseInt(intervalInput.value);
+    if (!isNaN(newInterval) && newInterval > 0) {
         fetch('/set-interval', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ interval: newInterval }) // 正しい形式のJSONデータを送信
-            })
-            .then(response => response.text())
-            .then(text => {
-                // 受け取ったレスポンスがJSONかどうかを確認
-                try {
-                    const data = JSON.parse(text);
-                    console.log('Interval updated successfully', data);
-                    startCountdown(newInterval); // インターバルが設定されたらカウントダウンを開始
-                    generateNumbersEnabled = true; // ボタンがクリックされたら生成を有効化
-                    resetGame(); // resetGame 関数を呼び出す
-                } catch (error) {
-                    if (text === 'Interval has been set') {
-                        console.log('数字生成間隔更新');
-                        startCountdown(newInterval); // インターバルが設定されたらカウントダウンを開始
-                        generateNumbersEnabled = true; // ボタンがクリックされたら生成を有効化
-                        resetGame(); // resetGame 関数を呼び出す
-                    } else {
-                        throw new Error(`Invalid JSON response: ${text}`);
-                    }
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ interval: newInterval })
+        })
+        .then(response => response.text())
+        .then(text => {
+            try {
+                const data = JSON.parse(text);
+                console.log('Interval updated successfully', data);
+                startCountdown(newInterval);
+                generateNumbersEnabled = true;
+                resetGame();
+            } catch (error) {
+                if (text === 'Interval has been set') {
+                    console.log('数字生成間隔更新');
+                    startCountdown(newInterval);
+                    generateNumbersEnabled = true;
+                    resetGame();
+                } else {
+                    throw new Error(`Invalid JSON response: ${text}`);
                 }
-            })
-            .catch(handleError);
+            }
+        })
+        .catch(handleError);
     } else {
         console.error('Invalid interval value:', intervalInput.value);
     }
 }
-
 
 // 共通のエラーハンドラー
 function handleError(error) {
     console.error('Error:', error.message);
     alert(`Error: ${error.message}`);
 }
-
 
 let countdownInterval;
 let generatedNumbers = [];
@@ -222,8 +216,6 @@ function handleNewNumber(data) {
     }
 
     const latestNumber = numbers[numbers.length - 1];
-
-    // generatedNumbersが配列でない場合は、新しい配列として初期化する
     if (!Array.isArray(generatedNumbers)) {
         generatedNumbers = [];
     }
@@ -236,109 +228,52 @@ function handleNewNumber(data) {
     logDiv.innerHTML = '';
     numbers.forEach(number => {
         const logItem = document.createElement('div');
-        logItem.textContent = `ログ:  ${number}`;
+        logItem.textContent = number;
         logDiv.appendChild(logItem);
     });
 
-    startCountdown();
-    playAudio(audioPath);
-
-    if (generatedNumbers.length >= 76) {
-        resetButton.style.display = 'block';
+    if (document.getElementById('mute-toggle').checked) {
+        const audio = new Audio(audioPath);
+        audio.play().catch(error => console.error('Error playing audio:', error));
     }
-}
-
-// ルーム参加リクエストのレスポンスを処理する関数
-function handleJoinRoomResponse(response) {
-    console.log('Response status:', response.status);
-    console.log('Response headers:', response.headers);
-    return response.text().then(text => {
-        console.log('Raw response text:', text); // レスポンスの生データをログに出力
-        if (!response.ok) {
-            try {
-                const errorJson = JSON.parse(text);
-                throw new Error(errorJson.error || 'Failed to join room');
-            } catch (e) {
-                throw new Error(text || 'Failed to join room');
-            }
-        }
-        if (text.trim() === '') {
-            throw new Error('Empty response');
-        }
-        try {
-            return JSON.parse(text);
-        } catch (e) {
-            throw new Error('Invalid JSON response');
-        }
-    }).then(handleJoinRoomData);
-}
-
-// ルーム参加時のエラーを処理する関数
-function handleJoinRoomError(error) {
-    console.error('Error:', error.message);
-    alert(`Error: ${error.message}`);
-}
-
-// ルーム参加時のデータを処理する関数
-function handleJoinRoomData(data) {
-    console.log('Response data:', data);
-    if (data.room_id) {
-        alert(`Joined room ${data.room_id}`);
-        ws = new WebSocket(`${wsHost}?room_id=${data.room_id}`);
-
-        ws.onopen = () => {
-            console.log('WebSocket connection established for room:', data.room_id);
-        };
-
-        ws.onmessage = event => {
-            console.log('Received WebSocket message:', event.data);
-            handleNewNumber(event.data);
-        };
-
-        ws.onerror = error => {
-            console.error('WebSocket error:', error);
-        };
-
-        ws.onclose = event => {
-            console.log('WebSocket connection closed:', event);
-        };
-    } else {
-        alert('Failed to join room');
-    }
-}
-
-// 新しいゲームのデータをレンダリングする関数
-function renderNewGame(data) {
-    renderBingoCard(data);
-    startCountdown(data.interval); 
-    generatedNumbers = data.generatedNumbers;
-    enableClickableCells();
-
 }
 
 // カウントダウンを開始する関数
-function startCountdown(newInterval) {
-    clearInterval(countdownInterval);
-    let countdownTime = newInterval || parseInt(intervalInput.value); // 新しいインターバル値またはinputの値を使用
-    updateCountdown(countdownTime);
+function startCountdown(interval) {
+    if (!interval || typeof interval !== 'number') {
+        console.error('Invalid interval value:', interval);
+        return;
+    }
+
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+    }
+
+    countdownDiv.textContent = interval;
+
     countdownInterval = setInterval(() => {
-        countdownTime--;
-        updateCountdown(countdownTime);
-        if (countdownTime <= 0) {
-            clearInterval(countdownInterval);
-            countdownDiv.textContent = '';
+        let currentCount = parseInt(countdownDiv.textContent);
+        if (isNaN(currentCount)) {
+            currentCount = interval;
         }
+
+        currentCount--;
+
+        if (currentCount <= 0) {
+            currentCount = interval;
+            fetchNextNumber();
+        }
+
+        countdownDiv.textContent = currentCount;
     }, 1000);
 }
 
-// カウントダウンを更新する関数
-function updateCountdown(time) {
-    if (!isNaN(time)) {
-        const seconds = time % 60;
-        countdownDiv.textContent = `${seconds < 10 ? '0' : ''}${seconds}`;
-    } else {
-        countdownDiv.textContent = '00'; 
-    }
+// 次の番号を取得する関数
+function fetchNextNumber() {
+    fetch('/next-number')
+        .then(response => response.json())
+        .then(handleNewNumber)
+        .catch(handleError);
 }
 
 // セルがクリック可能になるかどうかを判断する関数
@@ -356,22 +291,15 @@ function enableClickableCells() {
             }
         } else {
             cell.classList.remove('clickable');
-            cell.removeEventListener('click', cellClickHandler);
+            cell.removeEventListener('click', cellClickHandler); // イベントリスナーを削除
         }
     });
 
     const centerCell = document.querySelector('[data-row-index="2"][data-cell-index="2"]');
-    centerCell.classList.add('clickable');
-    centerCell.addEventListener('click', cellClickHandler);
-}
-
-// セルのクリックハンドラー
-function cellClickHandler() {
-    const rowIndex = parseInt(this.dataset.rowIndex);
-    const cellIndex = parseInt(this.dataset.cellIndex);
-    window.marked[rowIndex][cellIndex] = !window.marked[rowIndex][cellIndex];
-    this.classList.toggle('marked');
-    checkBingo();
+    if (centerCell) {
+        centerCell.classList.add('clickable');
+        centerCell.addEventListener('click', cellClickHandler);
+    }
 }
 
 // SEを再生する関数
@@ -382,36 +310,53 @@ function playAudio(audioPath) {
 
 // ビンゴカードをレンダリングする関数
 function renderBingoCard(data) {
-    bingoCard.innerHTML = '';
-    window.marked = Array.from({ length: 5 }, () => Array(5).fill(false));
-    data.forEach((row, i) => {
-        for (let j = 0; j < 5; j++) {
-            const cellDiv = document.createElement('div');
-            cellDiv.className = 'cell';
-            cellDiv.dataset.rowIndex = i;
-            cellDiv.dataset.cellIndex = j;
-            if (j < row.length) {
-                cellDiv.textContent = row[j] !== 0 ? row[j] : '☆';
-            } else {
-                cellDiv.textContent = '';
-            }
-            if (j < row.length && row[j] !== 0 && isClickableCell(row[j])) {
-                cellDiv.classList.add('clickable');
-                cellDiv.addEventListener('click', cellClickHandler);
-            }
-            if (i === 2 && j === 2) {
-                cellDiv.classList.add('clickable');
-                cellDiv.addEventListener('click', cellClickHandler);
-            }
-            bingoCard.appendChild(cellDiv);
+    if (!data || !data.card || !Array.isArray(data.card)) {
+        console.error('Invalid data format:', data);
+        return;
+    }
 
-            if (!window.marked[i]) {
-                window.marked[i] = [];
-            }
-            adjustFontSize(cellDiv);
-        }
+    bingoCard.innerHTML = '';
+    const card = data.card;
+
+    card.forEach((row, rowIndex) => {
+        const tr = document.createElement('tr');
+        row.forEach((cell, cellIndex) => {
+            const td = document.createElement('td');
+            td.textContent = cell;
+            td.classList.add('bingo-cell', 'cell');
+            td.dataset.rowIndex = rowIndex;
+            td.dataset.cellIndex = cellIndex;
+            tr.appendChild(td);
+        });
+        bingoCard.appendChild(tr);
     });
+
+    window.marked = Array.from({ length: 5 }, () => Array(5).fill(false));
+    document.querySelector('.row.mt-2').style.display = 'block';
+    adjustAllCellFonts();
     enableClickableCells();
+}
+
+
+// セルをマークする関数
+function markCell(cellElement) {
+    if (!cellElement || !cellElement.textContent) {
+        return;
+    }
+
+    const value = parseInt(cellElement.textContent);
+    if (isNaN(value) || generatedNumbers.indexOf(value) === -1) {
+        return;
+    }
+
+    cellElement.classList.add('marked');
+    const rowIndex = Array.from(cellElement.parentNode.parentNode.children).indexOf(cellElement.parentNode);
+    const cellIndex = Array.from(cellElement.parentNode.children).indexOf(cellElement);
+    window.marked[rowIndex][cellIndex] = true;
+
+    if (checkBingo()) {
+        alert('Bingo!');
+    }
 }
 
 // ビンゴをチェックする関数
@@ -439,21 +384,31 @@ function adjustFontSize(cell) {
     cell.style.fontSize = fontSize + "px";
 }
 
-// すべてのセルのフォントサイズを調整
+// すべてのセルのフォントサイズを調整する関数
 function adjustAllCellFonts() {
-    const cells = document.querySelectorAll(".cell");
-    cells.forEach(function(cell) {
-        adjustFontSize(cell);
-    });
+    const cells = document.querySelectorAll('.cell');
+    cells.forEach(adjustFontSize);
 }
 
-// 共通のレスポンスハンドラー
+// フェッチレスポンスを処理する関数
 function handleResponse(response) {
     if (!response.ok) {
-        return response.json().then(error => {
-            throw new Error(error.message || 'Network response was not ok');
-        });
+        throw new Error('Network response was not ok.');
     }
     return response.json();
 }
 
+// ルーム参加のレスポンスを処理する関数
+function handleJoinRoomResponse(data) {
+    if (!data || !data.card || !Array.isArray(data.card)) {
+        throw new Error('Invalid response data');
+    }
+    renderBingoCard(data);
+    startCountdown(data.interval);
+}
+
+// ルーム参加エラーを処理する関数
+function handleJoinRoomError(error) {
+    console.error('ルームに参加できませんでした:', error.message);
+    alert('ルームに参加できませんでした。再試行してください。');
+}
