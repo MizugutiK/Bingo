@@ -24,7 +24,6 @@ var upgrader = websocket.Upgrader{
 
 // WebSocket接続しているクライアントを保持するマップ
 var clients = make(map[*websocket.Conn]bool)
-var generatedNumbers = make([]int, 0)
 
 // ルーム管理のためのインスタンス
 var roomManager = NewRoomManager()
@@ -234,42 +233,61 @@ func readNumbersFromFile(fileName string) ([]int, error) {
 	return numbers, nil
 }
 
+var generatedNumbers []int // 重複をチェックするためのスライス
+
 func generateAndWriteNumbersToFiles() {
 	for {
-		newNumber := generateUniqueNumber()
+		// ルームが存在しない場合は待機する
+		if len(roomManager.Rooms) == 0 {
+			log.Println("ルームが存在しないため、数字の生成を待機しています...")
+			time.Sleep(time.Second * 10) // 10秒待機して再試行する
+			continue
+		}
 
 		// すべてのルームのファイルに数字を書き込む
 		for _, room := range roomManager.Rooms {
-			fileName := getFileName(room) // ポインタを渡す
-			file, err := os.OpenFile(fileName, os.O_APPEND|os.O_WRONLY, 0644)
+			newNumber := generateUniqueNumber() // 重複しない数字を生成する
+			fileName := getFileName(room)       // ルームごとのファイル名を取得する
+
+			// ファイルをオープン（追記モードで、存在しない場合は作成）
+			file, err := os.OpenFile(fileName, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
 			if err != nil {
-				log.Printf("ファイルのオープンに失敗しました: %v", err)
+				log.Printf("ファイル %s のオープンに失敗しました: %v", fileName, err)
 				continue
 			}
 
+			// ファイルに新しい数字を書き込む
 			if _, err := file.WriteString(fmt.Sprintf("%d\n", newNumber)); err != nil {
-				log.Printf("ファイルへの書き込みに失敗しました: %v", err)
+				log.Printf("ファイル %s への書き込みに失敗しました: %v", fileName, err)
 			}
 
-			file.Close() // ファイルの使用が終わったら明示的にクローズする
+			// ファイルをクローズする
+			if err := file.Close(); err != nil {
+				log.Printf("ファイル %s のクローズに失敗しました: %v", fileName, err)
+			}
 		}
+
+		// 一定時間待機する（例として1秒）
+		time.Sleep(1000)
 	}
 }
 
 // 重複しない数字を生成する関数
 func generateUniqueNumber() int {
-	newNumber := rand.Intn(75) + 1
-	for contains(generatedNumbers, newNumber) {
-		newNumber = rand.Intn(75) + 1
+	for {
+		newNumber := rand.Intn(75) + 1
+		if !contains(generatedNumbers, newNumber) {
+			generatedNumbers = append(generatedNumbers, newNumber)
+			log.Printf("生成された数字: %d", newNumber) // ログ出力
+			return newNumber
+		}
 	}
-	generatedNumbers = append(generatedNumbers, newNumber)
-	return newNumber
 }
 
-// 指定された数字がリストに含まれているかどうかを確認する関数
-func contains(numbers []int, number int) bool {
-	for _, n := range numbers {
-		if n == number {
+// スライスに指定された値が含まれているかを確認する関数
+func contains(slice []int, item int) bool {
+	for _, element := range slice {
+		if element == item {
 			return true
 		}
 	}
