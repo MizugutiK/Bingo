@@ -275,7 +275,14 @@ function fetchNextNumber() {
         .then(handleNewNumber)
         .catch(handleError);
 }
-
+// セルのクリックハンドラー
+function cellClickHandler() {
+    const rowIndex = parseInt(this.dataset.rowIndex);
+    const cellIndex = parseInt(this.dataset.cellIndex);
+    window.marked[rowIndex][cellIndex] = !window.marked[rowIndex][cellIndex];
+    this.classList.toggle('marked');
+    checkBingo();
+}
 // セルがクリック可能になるかどうかを判断する関数
 function enableClickableCells() {
     const cells = document.querySelectorAll('.cell');
