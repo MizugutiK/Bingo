@@ -143,8 +143,14 @@ func GetRoomNumbersHandler(w http.ResponseWriter, r *http.Request) {
 	roomName := r.URL.Query().Get("room_name")
 	password := r.URL.Query().Get("password")
 
+	// Room構造体を作成
+	room := &Room{
+		RoomName: roomName,
+		Password: password,
+	}
+
 	// 対応するテキストファイルから数字を取得
-	fileName := fmt.Sprintf("%s_%s.txt", roomName, password)
+	fileName := getFileName(room)
 	numbers, err := readNumbersFromFile(fileName)
 	if err != nil {
 		log.Printf("GetRoomNumbersHandler関数ファイルの読み込みに失敗しました: %v", err)
@@ -155,6 +161,55 @@ func GetRoomNumbersHandler(w http.ResponseWriter, r *http.Request) {
 	// クライアントに数字を返す
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(numbers)
+}
+
+// ルームの情報からファイル名を生成する関数
+func getFileName(room *Room) string {
+	return fmt.Sprintf("%s_%s.txt", room.RoomName, room.Password)
+}
+
+// HTTPハンドラー
+func handleNumbersRequest(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		RoomName string `json:"room_name"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// RoomNameとPasswordが一致するユーザーかどうかを確認
+	if !isValidUser(req.RoomName, req.Password) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// ファイル名を構成
+	fileName := fmt.Sprintf("%s_%s.txt", req.RoomName, req.Password)
+
+	// テキストファイルから数字を読み取る
+	numbers, err := readNumbersFromFile(fileName)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// レスポンスデータを構築
+	responseData := ResponseData{
+		Numbers: numbers,
+	}
+
+	// JSON形式でレスポンスを返す
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(responseData)
+}
+
+// ユーザーが正当なRoomNameとPasswordを提供しているかを確認する関数
+func isValidUser(roomName, password string) bool {
+	// ここで適切な認証メカニズムを実装する
+	// 例: ハードコードされた場合
+	return roomName == "validRoom" && password == "validPassword"
 }
 
 // テキストファイルから数字を読み取る関数
@@ -179,14 +234,13 @@ func readNumbersFromFile(fileName string) ([]int, error) {
 	return numbers, nil
 }
 
-// 数字を生成してテキストファイルに書き込む関数
 func generateAndWriteNumbersToFiles() {
 	for {
 		newNumber := generateUniqueNumber()
 
 		// すべてのルームのファイルに数字を書き込む
 		for _, room := range roomManager.Rooms {
-			fileName := fmt.Sprintf("%s_%s.txt", room.RoomName, room.Password)
+			fileName := getFileName(room) // ポインタを渡す
 			file, err := os.OpenFile(fileName, os.O_APPEND|os.O_WRONLY, 0644)
 			if err != nil {
 				log.Printf("ファイルのオープンに失敗しました: %v", err)
@@ -228,6 +282,11 @@ const (
 	PrivateRoomType = "private"
 	PasswordLength  = 6
 )
+
+// レスポンス用の構造体
+type ResponseData struct {
+	Numbers []int `json:"numbers"`
+}
 
 // Room構造体
 type Room struct {
