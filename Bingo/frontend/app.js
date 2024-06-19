@@ -44,11 +44,8 @@ const bingoCard = document.getElementById('bingo-card');
 const numberDiv = document.getElementById('number');
 const countdownDiv = document.getElementById('countdown');
 const logDiv = document.getElementById('log');
-const roomNameDisplay = document.getElementById('roomNameDisplay');
-
 const resetButton = document.getElementById('reset-game');
 const joinRoomButton = document.getElementById('join-room');
-const roomNameInput = document.getElementById('roomname');
 const createRoomButton = document.getElementById('create-room');
 const roomTypeSelect = document.getElementById('room-type');
 const setIntervalBtn = document.getElementById('set-interval-btn');
@@ -87,19 +84,15 @@ function resetGame() {
 
 // ルームに参加する関数
 function joinRoom() {
-    const roomName = roomNameInput.value.trim();
-    const password = document.getElementById('room-password').value;
-    console.log('Room Name:', roomName); // デバッグ用ログ
 
-    // ルーム名をブラウザ上に表示
-    roomNameDisplay.textContent = `ルーム名: ${roomName}`;
+    const password = document.getElementById('room-password').value;
 
     fetch('/join-room', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ room_name: roomName, password: password }) // ルーム名をリクエストに含める
+        body: JSON.stringify({ password: password }) // ルーム名をリクエストに含める
     })
     .then(handleResponse)
     .then(handleJoinRoomResponse)
@@ -108,32 +101,25 @@ function joinRoom() {
 
 // ルーム作成リクエストをサーバーに送信
 function createRoom() {
-    const roomName = roomNameInput.value.trim();
-    const roomType = roomTypeSelect.value;
 
-    console.log('Room Name:', roomName); // デバッグ用ログ
-
-    if (roomName !== '') {
         fetch('/create-room', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ room_name: roomName, room_type: roomType }) // ルーム名をリクエストに含める
+           
         })
         .then(response => response.json())
         .then(data => {
             if (data.password) {
-                console.log(`Generated Password for ${roomType} room: ${data.password}`);
-                alert(`Generated Password for ${roomType} room: ${data.password}`);
+                console.log(`Generated Password room: ${data.password}`);
+                alert(`Generated Password room: ${data.password}`);
             } else {
                 alert('Failed to generate room password');
             }
         })
         .catch(handleError);
-    } else {
-        alert('ルーム名を入力してください。');
-    }
+
 }
 
 
