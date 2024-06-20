@@ -84,7 +84,6 @@ function resetGame() {
 
 // ルームに参加する関数
 function joinRoom() {
-
     const password = document.getElementById('room-password').value;
 
     fetch('/join-room', {
@@ -92,11 +91,8 @@ function joinRoom() {
         headers: {
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ password: password }) // ルーム名をリクエストに含める
+        body: JSON.stringify({ password: password })
     })
-    .then(handleResponse)
-    .then(handleJoinRoomResponse)
-    .catch(handleJoinRoomError);
 }
 
 // ルーム作成リクエストをサーバーに送信
@@ -214,10 +210,10 @@ function handleNewNumber(data) {
     logDiv.innerHTML = '';
     numbers.forEach(number => {
         const logItem = document.createElement('div');
-        logItem.textContent = number;
+        logItem.textContent = `ログ:  ${number}`;
         logDiv.appendChild(logItem);
     });
-
+    playAudio(audioPath);
     if (document.getElementById('mute-toggle').checked) {
         const audio = new Audio(audioPath);
         audio.play().catch(error => console.error('Error playing audio:', error));
@@ -301,35 +297,38 @@ function playAudio(audioPath) {
     audio.play();
 }
 
-// ビンゴカードをレンダリングする関数
 function renderBingoCard(data) {
-    if (!data || !data.card || !Array.isArray(data.card)) {
-        console.error('Invalid data format:', data);
-        return;
-    }
-
     bingoCard.innerHTML = '';
-    const card = data.card;
-
-    card.forEach((row, rowIndex) => {
-        const tr = document.createElement('tr');
-        row.forEach((cell, cellIndex) => {
-            const td = document.createElement('td');
-            td.textContent = cell;
-            td.classList.add('bingo-cell', 'cell');
-            td.dataset.rowIndex = rowIndex;
-            td.dataset.cellIndex = cellIndex;
-            tr.appendChild(td);
-        });
-        bingoCard.appendChild(tr);
-    });
-
     window.marked = Array.from({ length: 5 }, () => Array(5).fill(false));
-    document.querySelector('.row.mt-2').style.display = 'block';
-    adjustAllCellFonts();
+    data.forEach((row, i) => {
+        for (let j = 0; j < 5; j++) {
+            const cellDiv = document.createElement('div');
+            cellDiv.className = 'cell';
+            cellDiv.dataset.rowIndex = i;
+            cellDiv.dataset.cellIndex = j;
+            if (j < row.length) {
+                cellDiv.textContent = row[j] !== 0 ? row[j] : '☆';
+            } else {
+                cellDiv.textContent = '';
+            }
+            if (j < row.length && row[j] !== 0 && isClickableCell(row[j])) {
+                cellDiv.classList.add('clickable');
+                cellDiv.addEventListener('click', cellClickHandler);
+            }
+            if (i === 2 && j === 2) {
+                cellDiv.classList.add('clickable');
+                cellDiv.addEventListener('click', cellClickHandler);
+            }
+            bingoCard.appendChild(cellDiv);
+
+            if (!window.marked[i]) {
+                window.marked[i] = [];
+            }
+            adjustFontSize(cellDiv);
+        }
+    });
     enableClickableCells();
 }
-
 
 // セルをマークする関数
 function markCell(cellElement) {
@@ -377,10 +376,12 @@ function adjustFontSize(cell) {
     cell.style.fontSize = fontSize + "px";
 }
 
-// すべてのセルのフォントサイズを調整する関数
+// すべてのセルのフォントサイズを調整
 function adjustAllCellFonts() {
-    const cells = document.querySelectorAll('.cell');
-    cells.forEach(adjustFontSize);
+    const cells = document.querySelectorAll(".cell");
+    cells.forEach(function(cell) {
+        adjustFontSize(cell);
+    });
 }
 
 // フェッチレスポンスを処理する関数
