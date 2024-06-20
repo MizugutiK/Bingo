@@ -248,7 +248,7 @@ func generateUniqueNumber() int {
 		newNumber := rand.Intn(75) + 1
 		if !contains(generatedNumbers, newNumber) {
 			generatedNumbers = append(generatedNumbers, newNumber)
-			log.Printf("生成された数字: %d", newNumber) // ログ出力
+			// log.Printf("生成された数字: %d", newNumber) // ログ出力
 			return newNumber
 		}
 	}
@@ -363,28 +363,12 @@ func JoinRoomHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ビンゴカードデータを生成
-	bingoCard := generateBingoCard()
-
-	// BingoCard型を[][]interface{}型に変換
-	convertedCard := make([][]interface{}, 5)
-	for i := range bingoCard {
-		convertedCard[i] = make([]interface{}, 5)
-		for j := range bingoCard[i] {
-			if bingoCard[i][j] == 0 {
-				convertedCard[i][j] = "FREE"
-			} else {
-				convertedCard[i][j] = bingoCard[i][j]
-			}
-		}
-	}
-
 	// レスポンスデータを構造体に格納
 	response := struct {
 		Card     [][]interface{} `json:"card"`
 		Interval int             `json:"interval"`
 	}{
-		Card:     convertedCard,
+
 		Interval: 10, // 例として10秒のインターバルを設定
 	}
 
