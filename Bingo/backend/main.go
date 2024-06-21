@@ -50,40 +50,45 @@ func NewRoomManager() *RoomManager {
 // WebSocket接続を処理する関数
 func handleConnections(w http.ResponseWriter, r *http.Request) {
 	// WebSocketのアップグレード
-	ws2, err := upgrader.Upgrade(w, r, nil)
-	ws = ws2
+	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Fatalf("handleConnections関数WebSocket アップグレード エラー: %v", err)
+		log.Fatalf("WebSocket アップグレード エラー: %v", err)
 		http.Error(w, "WebSocket アップグレード エラー", http.StatusInternalServerError)
 		return
 	}
-	defer ws.Close()
+	defer conn.Close()
+
+	// WebSocket接続が確立したことをログに記録
+	log.Printf("新しい WebSocket 接続が確立: %s", conn.RemoteAddr())
+
 	// 初回メッセージでルーム名とパスワードを受け取る
 	var req struct {
 		Password string `json:"password"`
 	}
-	if err := ws.ReadJSON(&req); err != nil {
-		log.Printf("handleConnections関数初回メッセージの読み取りエラー: %v", err)
-
+	if err := conn.ReadJSON(&req); err != nil {
+		log.Printf("初回メッセージの読み取りエラー: %v", err)
 		return
 	}
 
 	// ルームに参加
-	success := roomManager.JoinRoom(req.Password, ws)
+	success := roomManager.JoinRoom(req.Password, conn)
 	if !success {
-		log.Printf("handleConnections関数部屋に参加できませんでした: %s", req.Password)
-
+		log.Printf("部屋に参加できませんでした: %s", req.Password)
 		return
 	}
 
-	log.Printf("新しい WebSocket 接続が確立: %s", ws.RemoteAddr())
+	// クライアントをマップに追加
+	roomManager.Rooms[req.Password].Clients[conn] = true
+	log.Printf("部屋に参加しました: %s", req.Password) // パスワードが正しい場合のログ
+
+	conn.WriteJSON(map[string]string{"message": "部屋に参加しました"})
 
 	// クライアントからのメッセージを待機するループ
 	for {
-		_, _, err := ws.ReadMessage()
+		_, _, err := conn.ReadMessage()
 		if err != nil {
-			log.Printf("接続切れた: %v", err)
-			delete(clients, ws)
+			log.Printf("接続が切れました: %v", err)
+			delete(roomManager.Rooms[req.Password].Clients, conn) // クライアントをマップから削除
 			break
 		}
 	}
@@ -355,30 +360,32 @@ func (rm *RoomManager) GetRoomByPassword(password string) *Room {
 }
 
 func JoinRoomHandler(w http.ResponseWriter, r *http.Request) {
-	// ルームを作成する
-	password := roomManager.CreateRoom()
-	if password == "" {
-		log.Printf("JoinRoomHandler関数部屋の作成に失敗しました")
-		http.Error(w, "部屋の作成に失敗しました", http.StatusInternalServerError)
+	if r.Method != http.MethodPost {
+		http.Error(w, "無効なHTTPメソッド", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// レスポンスデータを構造体に格納
-	response := struct {
-		Card     [][]interface{} `json:"card"`
-		Interval int             `json:"interval"`
-	}{
-
-		Interval: 10, // 例として10秒のインターバルを設定
+	var req struct {
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("リクエストのデコードエラー: %v", err)
+		http.Error(w, "リクエスト本文が無効です", http.StatusBadRequest)
+		return
 	}
 
-	// レスポンスをJSON形式で送信
+	// ルームに参加
+	success := roomManager.JoinRoom(req.Password, nil) // nilはWebSocket接続ではないため
+	if !success {
+		log.Printf("部屋に参加できませんでした: %s", req.Password)
+		http.Error(w, "部屋に参加できませんでした", http.StatusUnauthorized)
+		return
+	}
+
+	log.Printf("部屋に参加しました: %s", req.Password) // パスワードが正しい場合のログ
+
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("JoinRoomHandler関数レスポンスのエンコードエラー: %v", err)
-		http.Error(w, "レスポンスのエンコードに失敗しました", http.StatusInternalServerError)
-		return
-	}
+	json.NewEncoder(w).Encode(map[string]string{"message": "部屋に参加しました"})
 }
 
 // ビンゴカードを生成するハンドラー関数
