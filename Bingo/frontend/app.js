@@ -93,6 +93,15 @@ function joinRoom() {
         },
         body: JSON.stringify({ password: password })
     })
+    .then(response => response.json())
+    .then(data => {
+        if (data.message) {
+            console.log(data.message); // 成功メッセージをコンソールに表示
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+    });
 }
 
 // ルーム作成リクエストをサーバーに送信
@@ -115,9 +124,7 @@ function createRoom() {
             }
         })
         .catch(handleError);
-
 }
-
 
 // インターバル設定ボタンのクリックイベントリスナー
 function handleSetIntervalBtnClick() {
