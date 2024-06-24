@@ -67,13 +67,15 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := conn.ReadJSON(&req); err != nil {
 		log.Printf("初回メッセージの読み取りエラー: %v", err)
+		conn.WriteMessage(websocket.TextMessage, []byte("初回メッセージの読み取りエラー")) // エラー詳細をクライアントに送信
 		return
 	}
-
+	log.Printf("受信したルームパスワード: %s", req.Password)
 	// ルームに参加
 	success := roomManager.JoinRoom(req.Password, conn)
 	if !success {
 		log.Printf("部屋に参加できませんでした: %s", req.Password)
+		conn.WriteMessage(websocket.TextMessage, []byte("部屋に参加できませんでした")) // エラー詳細をクライアントに送信
 		return
 	}
 
@@ -110,7 +112,26 @@ func (rm *RoomManager) JoinRoom(password string, ws *websocket.Conn) bool {
 	return true
 }
 
-// CreateRoomHandler 部屋を作成するハンドラー関数
+// ルーム作成関数
+func (rm *RoomManager) CreateRoom() string {
+	rm.Mutex.Lock()
+	defer rm.Mutex.Unlock()
+
+	password := generatePassword(PasswordLength)
+	room := &Room{
+		Password: password,
+		Clients:  make(map[*websocket.Conn]bool),
+	}
+
+	rm.Rooms[password] = room
+
+	log.Printf("新しいルームが作成されました. Password: %s", password)
+	log.Printf("現在のルーム一覧: %v", rm.Rooms) // 追加されたルーム一覧をログに出力
+
+	return password
+}
+
+// 部屋を作成するハンドラー関数
 func CreateRoomHandler(w http.ResponseWriter, r *http.Request) {
 	password := roomManager.CreateRoom()
 	if password == "" {
@@ -118,10 +139,20 @@ func CreateRoomHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "部屋の作成に失敗しました", http.StatusInternalServerError)
 		return
 	}
-
-	resp := map[string]string{
-		"password": password,
+	// パスワードに対応するルームを取得
+	room := roomManager.GetRoomByPassword(password)
+	if room == nil {
+		log.Printf("ルームが見つかりませんでした: %s", password)
+		http.Error(w, "ルームが見つかりませんでした", http.StatusInternalServerError)
+		return
 	}
+
+	// レスポンスデータを構築
+	resp := map[string]string{
+		"password": room.Password,
+	}
+
+	// レスポンスをJSON形式で返す
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
@@ -129,10 +160,20 @@ func CreateRoomHandler(w http.ResponseWriter, r *http.Request) {
 // ルームごとの数字を取得するハンドラー関数
 func GetRoomNumbersHandler(w http.ResponseWriter, r *http.Request) {
 	password := r.URL.Query().Get("password")
+	log.Printf("GetRoomNumbersHandler関数 リクエストされたパスワード: %s", password)
+
+	// パスワードが提供されていない場合のエラーハンドリング
+	if password == "" {
+		log.Println("パスワードが提供されていません")
+		http.Error(w, "パスワードが提供されていません", http.StatusBadRequest)
+		return
+	}
+
+	// ルームの数字を取得する
 	numbers, err := roomManager.GetNumbersForRoom(password)
 	if err != nil {
 		log.Printf("数字の取得に失敗しました: %v", err)
-		http.Error(w, "数字の取得に失敗しました", http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("数字の取得に失敗しました: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -168,24 +209,6 @@ func readNumbersFromFile(fileName string) ([]int, error) {
 	}
 
 	return numbers, nil
-}
-
-// ルーム作成関数
-func (rm *RoomManager) CreateRoom() string {
-	rm.Mutex.Lock()
-	defer rm.Mutex.Unlock()
-
-	password := generatePassword(PasswordLength)
-	room := &Room{
-		Password: password,
-		Clients:  make(map[*websocket.Conn]bool),
-	}
-
-	rm.Rooms[password] = room
-
-	log.Printf("新しいルームが作成されました. Password: %s", password)
-
-	return password
 }
 
 func generateAndWriteNumbersToFiles() {
@@ -230,10 +253,14 @@ func (rm *RoomManager) GetNumbersForRoom(password string) ([]int, error) {
 	rm.Mutex.Lock()
 	defer rm.Mutex.Unlock()
 
-	room := rm.Rooms[password]
-	if room == nil {
+	room, exists := rm.Rooms[password]
+	if !exists {
+		log.Printf("GetNumbersForRoom: ルームが見つかりません: %s", password) // エラーログ追加
 		return nil, fmt.Errorf("ルームが見つかりません: %s", password)
 	}
+
+	room.Mutex.Lock()
+	defer room.Mutex.Unlock()
 
 	// ファイル名を取得
 	fileName := getFileName(room)
@@ -279,14 +306,8 @@ func generatePassword(length int) string {
 	return string(b)
 }
 
-// WebSocket接続しているクライアントを保持するマップ
-var clients = make(map[*websocket.Conn]bool)
-
 // ルーム管理のためのインスタンス
 var roomManager = NewRoomManager()
-
-// 現在のWebSocket接続を保持する変数
-var ws *websocket.Conn
 
 func main() {
 	// 静的ファイルの配信
@@ -314,34 +335,20 @@ func main() {
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
-// HTTPハンドラー
-func handleNumbersRequest(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Password string `json:"password"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	// ファイル名を構成
-	fileName := fmt.Sprintf("%s.txt", req.Password)
-
-	// テキストファイルから数字を読み取る
-	numbers, err := readNumbersFromFile(fileName)
+// 共通の数字取得とレスポンス作成を行う関数
+func handleNumbersRequest(w http.ResponseWriter, password string) {
+	numbers, err := roomManager.GetNumbersForRoom(password)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("数字の取得に失敗しました: %v", err)
+		http.Error(w, fmt.Sprintf("数字の取得に失敗しました: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	// レスポンスデータを構築
-	responseData := ResponseData{
+	resp := ResponseData{
 		Numbers: numbers,
 	}
-
-	// JSON形式でレスポンスを返す
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(responseData)
+	json.NewEncoder(w).Encode(resp)
 }
 
 var generatedNumbers []int // 重複をチェックするためのスライス
@@ -382,7 +389,7 @@ func JoinRoomHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("部屋に参加しました: %s", req.Password) // パスワードが正しい場合のログ
+	log.Printf("JoinRoomHandler 関数 部屋に参加しました: %s", req.Password) // パスワードが正しい場合のログ
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"message": "部屋に参加しました"})
@@ -423,7 +430,6 @@ func ResetGeneratedNumbersHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
 	w.Write(jsonResponse)
 }
 
