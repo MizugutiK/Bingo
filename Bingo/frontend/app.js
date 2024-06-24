@@ -1,6 +1,6 @@
 let ws;
 let generateNumbersEnabled = false; // 初期状態はfalse
-
+let roomPassword = ''; // グローバル変数としてパスワードを宣言
 // DOMContentLoaded イベントでページが読み込まれた後に実行される
 document.addEventListener("DOMContentLoaded", function() {
     initializeWebSocket();
@@ -25,7 +25,6 @@ function initializeWebSocket() {
             const generatedNumbersFromServer = JSON.parse(event.data);
             generatedNumbers = generatedNumbersFromServer;
             enableClickableCells();
-            handleNewNumber(event.data);
         }
     };
 
@@ -52,6 +51,7 @@ const setIntervalBtn = document.getElementById('set-interval-btn');
 const intervalInput = document.getElementById('interval');
 // UI周りの表示非表示用の宣言
 const elementsToHide = document.querySelectorAll('#interval, #set-interval-btn, #CreateRoom, #join-room-container,#reset-game,#interval-label');
+const password = document.getElementById('room-password').value
 
 // ビンゴカードを非表示にする
 document.querySelector('.row.mt-2').style.display = 'none';
@@ -82,10 +82,10 @@ function resetGame() {
         .catch(handleError);
 }
 
-// ルームに参加する関数
 function joinRoom() {
-    const password = document.getElementById('room-password').value;
-
+    const password = document.getElementById('room-password').value; // パスワードを取得
+    roomPassword = password; // グローバル変数にパスワードを保存
+    // サーバーにパスワードを送信するためのリクエストを作成
     fetch('/join-room', {
         method: 'POST',
         headers: {
@@ -93,14 +93,23 @@ function joinRoom() {
         },
         body: JSON.stringify({ password: password })
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Failed to join room. Server returned ' + response.status + ' ' + response.statusText);
+        }
+        return response.json();
+    })
     .then(data => {
         if (data.message) {
             console.log(data.message); // 成功メッセージをコンソールに表示
+            // パスワードが正しい場合の処理を追加
+            fetchRoomNumbers(); // 成功した場合に、テキストファイルの情報を取得する処理を呼び出す
+            // その他の処理を追加
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        console.error('Error:', error.message);
+        alert(`Error: ${error.message}`);
     });
 }
 
@@ -186,12 +195,30 @@ let countdownInterval;
 let generatedNumbers = [];
 const audioPath = 'chime.mp3';
 
-// セルがクリック可能かどうかを判断する関数
-function isClickableCell(cellValue) {
-    return !generatedNumbers.includes(cellValue);
+function fetchRoomNumbers() {
+    console.log('Fetching room numbers...');
+
+    // パスワードを使用してサーバーにリクエストを送信
+    fetch(`/get-room-numbers?password=${encodeURIComponent(roomPassword)}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to fetch room numbers. Server returned ' + response.status + ' ' + response.statusText);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data && data.numbers) {
+                handleNewNumber(data.numbers);
+            } else {
+                throw new Error('Invalid response format: missing numbers');
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching room numbers:', error.message);
+            alert('Failed to fetch room numbers. Please try again later.');
+        });
 }
 
-// 新しい数字を取得したときの処理
 function handleNewNumber(data) {
     if (!data) {
         console.error('Empty message received from WebSocket.');
@@ -227,6 +254,7 @@ function handleNewNumber(data) {
     }
 }
 
+
 // カウントダウンを開始する関数
 function startCountdown(interval) {
     if (!interval || typeof interval !== 'number') {
@@ -250,20 +278,14 @@ function startCountdown(interval) {
 
         if (currentCount <= 0) {
             currentCount = interval;
-            fetchNextNumber();
+          
         }
 
         countdownDiv.textContent = currentCount;
     }, 1000);
 }
 
-// 次の番号を取得する関数
-function fetchNextNumber() {
-    fetch('/next-number')
-        .then(response => response.json())
-        .then(handleNewNumber)
-        .catch(handleError);
-}
+
 // セルのクリックハンドラー
 function cellClickHandler() {
     const rowIndex = parseInt(this.dataset.rowIndex);
