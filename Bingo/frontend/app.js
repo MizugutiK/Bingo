@@ -198,61 +198,65 @@ const audioPath = 'chime.mp3';
 function fetchRoomNumbers() {
     console.log('Fetching room numbers...');
 
-    // パスワードを使用してサーバーにリクエストを送信
-    fetch(`/get-room-numbers?password=${encodeURIComponent(roomPassword)}`)
+    const url = `/get-room-numbers?password=${encodeURIComponent(roomPassword)}`;
+
+    fetch(url)
         .then(response => {
             if (!response.ok) {
-                throw new Error('Failed to fetch room numbers. Server returned ' + response.status + ' ' + response.statusText);
+                throw new Error(`部屋番号の取得に失敗しました。サーバーが返されました ${response.status} ${response.statusText}`);
             }
-            return response.json();
+            return response.json(); // JSONとして受け取る
         })
-        .then(data => {
-            if (data && data.numbers) {
-                handleNewNumber(data.numbers);
+        .then(jsonData => {
+            console.log('Received data:', jsonData); // 受け取ったデータをログに出力
+
+            if (jsonData && jsonData.numbers) {
+                handleNewNumber(jsonData.numbers); // 受け取った数字のリストを処理する
             } else {
-                throw new Error('Invalid response format: missing numbers');
+                throw new Error('応答形式が無効です: 数字がありません');
             }
         })
         .catch(error => {
-            console.error('Error fetching room numbers:', error.message);
-            alert('Failed to fetch room numbers. Please try again later.');
+            console.error('部屋番号の取得中にエラーが発生しました:', error.message);
+            alert('部屋番号を取得できませんでした。しばらくしてからもう一度お試しください。');
         });
 }
 
 function handleNewNumber(data) {
-    if (!data) {
-        console.error('Empty message received from WebSocket.');
-        return;
-    }
+    try {
+        const numbers = data;
 
-    const numbers = JSON.parse(data);
-    if (!Array.isArray(numbers)) {
-        console.error('Invalid message format received from WebSocket.');
-        return;
-    }
+        if (!Array.isArray(numbers)) {
+            throw new Error('Invalid message format received from WebSocket.');
+        }
 
-    const latestNumber = numbers[numbers.length - 1];
-    if (!Array.isArray(generatedNumbers)) {
-        generatedNumbers = [];
-    }
+        const latestNumber = numbers[numbers.length - 1];
 
-    generatedNumbers.push(latestNumber);
+        generatedNumbers.push(latestNumber);
 
-    enableClickableCells();
-    numberDiv.textContent = `Newナンバー: ${latestNumber}`;
+        enableClickableCells();
+        numberDiv.textContent = `Newナンバー: ${latestNumber}`;
 
-    logDiv.innerHTML = '';
-    numbers.forEach(number => {
-        const logItem = document.createElement('div');
-        logItem.textContent = `ログ:  ${number}`;
-        logDiv.appendChild(logItem);
-    });
-    playAudio(audioPath);
-    if (document.getElementById('mute-toggle').checked) {
-        const audio = new Audio(audioPath);
-        audio.play().catch(error => console.error('Error playing audio:', error));
+        logDiv.innerHTML = '';
+        numbers.forEach(number => {
+            const logItem = document.createElement('div');
+            logItem.textContent = `ログ: ${number}`;
+            logDiv.appendChild(logItem);
+        });
+        playAudio(audioPath);
+        
+        // mute-toggleが存在する場合にのみ処理を行う
+        const muteToggle = document.getElementById('mute-toggle');
+        if (muteToggle && muteToggle.checked) {
+            const audio = new Audio(audioPath);
+            audio.play().catch(error => console.error('Error playing audio:', error));
+        }
+    } catch (error) {
+        console.error('Error handling new number data:', error.message);
+        alert('サーバーからのデータ処理中にエラーが発生しました。しばらくしてからもう一度お試しください。');
     }
 }
+
 
 
 // カウントダウンを開始する関数
