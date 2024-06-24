@@ -37,7 +37,7 @@ type Room struct {
 
 // レスポンス用の構造体
 type ResponseData struct {
-	Numbers []int `json:"numbers"`
+	Numbers int `json:"numbers"`
 }
 
 // 新しいRoomManagerインスタンスを作成
@@ -157,7 +157,7 @@ func CreateRoomHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// ルームごとの数字を取得するハンドラー関数
+// ルームの数字を取得するハンドラー関数
 func GetRoomNumbersHandler(w http.ResponseWriter, r *http.Request) {
 	password := r.URL.Query().Get("password")
 	log.Printf("GetRoomNumbersHandler関数 リクエストされたパスワード: %s", password)
@@ -177,11 +177,16 @@ func GetRoomNumbersHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := ResponseData{
-		Numbers: numbers,
-	}
+	log.Printf("取得した数字: %v", numbers)
+
+	// サーバーサイドのJSON生成例
+	resp := map[string][]int{"numbers": numbers} // numbers をキーにしたマップを生成
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Printf("JSONエンコードに失敗しました: %v", err)
+		http.Error(w, "サーバーエラー", http.StatusInternalServerError)
+	}
 }
 
 // ルームの情報からファイル名を生成する関数
@@ -336,20 +341,20 @@ func main() {
 }
 
 // 共通の数字取得とレスポンス作成を行う関数
-func handleNumbersRequest(w http.ResponseWriter, password string) {
-	numbers, err := roomManager.GetNumbersForRoom(password)
-	if err != nil {
-		log.Printf("数字の取得に失敗しました: %v", err)
-		http.Error(w, fmt.Sprintf("数字の取得に失敗しました: %v", err), http.StatusInternalServerError)
-		return
-	}
+// func handleNumbersRequest(w http.ResponseWriter, password string) {
+// 	numbers, err := roomManager.GetNumbersForRoom(password)
+// 	if err != nil {
+// 		log.Printf("数字の取得に失敗しました: %v", err)
+// 		http.Error(w, fmt.Sprintf("数字の取得に失敗しました: %v", err), http.StatusInternalServerError)
+// 		return
+// 	}
 
-	resp := ResponseData{
-		Numbers: numbers,
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
-}
+// 	resp := ResponseData{
+// 		Numbers: numbers,
+// 	}
+// 	w.Header().Set("Content-Type", "application/json")
+// 	json.NewEncoder(w).Encode(resp)
+// }
 
 var generatedNumbers []int // 重複をチェックするためのスライス
 
