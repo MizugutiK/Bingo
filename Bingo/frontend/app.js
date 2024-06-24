@@ -195,6 +195,11 @@ let countdownInterval;
 let generatedNumbers = [];
 const audioPath = 'chime.mp3';
 
+// セルがクリック可能かどうかを判断する関数
+function isClickableCell(cellValue) {
+    return !generatedNumbers.includes(cellValue);
+}
+
 function fetchRoomNumbers() {
     console.log('Fetching room numbers...');
 
