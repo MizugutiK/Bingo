@@ -115,27 +115,36 @@ function joinRoom() {
 
 // ルーム作成リクエストをサーバーに送信
 function createRoom() {
-
+    // intervalInputから入力された値を整数に変換します
+    const interval = parseInt(intervalInput.value);
+    
+    // 入力された値が有効な数値であり、0より大きい場合のみ処理を続行します
+    if (!isNaN(interval) && interval > 0) {
+        // fetch関数を使用して、サーバーの/create-roomエンドポイントにPOSTリクエストを送信します
         fetch('/create-room', {
-            method: 'POST',
+            method: 'POST', // POSTメソッドを使用します
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json' // リクエストのヘッダーでJSON形式のデータを指定します
             },
-           
+            body: JSON.stringify({ interval: interval }) // リクエストのボディにインターバル値を含めます
         })
-        .then(response => response.json())
+        .then(response => response.json()) // レスポンスをJSON形式で解析します
         .then(data => {
+            // サーバーから返ってきたデータ（ここではパスワード）を処理します
             if (data.password) {
-                console.log(`Generated Password room: ${data.password}`);
-                alert(`Generated Password room: ${data.password}`);
+                console.log(`生成されたパスワード: ${data.password}`); // コンソールにパスワードを表示します
+                alert(`生成されたパスワード: ${data.password}`); // ユーザーにパスワードを示すアラートを表示します
             } else {
-                alert('Failed to generate room password');
+                alert('部屋のパスワードを生成できませんでした'); // パスワードが返されなかった場合のエラーアラートを表示します
             }
         })
-        .catch(handleError);
+        .catch(handleError); // エラーが発生した場合に処理するためのエラーハンドラーです
+    } else {
+        console.error('無効な間隔値:', intervalInput.value); // 入力されたインターバル値が無効な場合にコンソールにエラーメッセージを出力します
+        alert('有効な間隔値を入力してください'); // ユーザーに有効なインターバル値を入力するように促すアラートを表示します
+    }
 }
 
-// インターバル設定ボタンのクリックイベントリスナー
 function handleSetIntervalBtnClick() {
     elementsToHide.forEach(element => {
         element.style.display = 'none';
@@ -151,38 +160,8 @@ function handleSetIntervalBtnClick() {
         })
         .catch(handleError);
 
-    const newInterval = parseInt(intervalInput.value);
-    if (!isNaN(newInterval) && newInterval > 0) {
-        fetch('/set-interval', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ interval: newInterval })
-        })
-        .then(response => response.text())
-        .then(text => {
-            try {
-                const data = JSON.parse(text);
-                console.log('Interval updated successfully', data);
-                startCountdown(newInterval);
-                generateNumbersEnabled = true;
-                resetGame();
-            } catch (error) {
-                if (text === 'Interval has been set') {
-                    console.log('数字生成間隔更新');
-                    startCountdown(newInterval);
-                    generateNumbersEnabled = true;
-                    resetGame();
-                } else {
-                    throw new Error(`Invalid JSON response: ${text}`);
-                }
-            }
-        })
-        .catch(handleError);
-    } else {
-        console.error('Invalid interval value:', intervalInput.value);
-    }
+    generateNumbersEnabled = true;
+    // resetGame();
 }
 
 // 共通のエラーハンドラー
@@ -262,8 +241,6 @@ function handleNewNumber(data) {
     }
 }
 
-
-
 // カウントダウンを開始する関数
 function startCountdown(interval) {
     if (!interval || typeof interval !== 'number') {
@@ -294,7 +271,6 @@ function startCountdown(interval) {
     }, 1000);
 }
 
-
 // セルのクリックハンドラー
 function cellClickHandler() {
     const rowIndex = parseInt(this.dataset.rowIndex);
@@ -303,6 +279,7 @@ function cellClickHandler() {
     this.classList.toggle('marked');
     checkBingo();
 }
+
 // セルがクリック可能になるかどうかを判断する関数
 function enableClickableCells() {
     const cells = document.querySelectorAll('.cell');

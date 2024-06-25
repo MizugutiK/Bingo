@@ -33,6 +33,7 @@ type Room struct {
 	Password string
 	Clients  map[*websocket.Conn]bool
 	Mutex    sync.Mutex
+	Interval int
 }
 
 // レスポンス用の構造体
@@ -113,7 +114,7 @@ func (rm *RoomManager) JoinRoom(password string, ws *websocket.Conn) bool {
 }
 
 // ルーム作成関数
-func (rm *RoomManager) CreateRoom() string {
+func (rm *RoomManager) CreateRoom(interval int) string {
 	rm.Mutex.Lock()
 	defer rm.Mutex.Unlock()
 
@@ -121,11 +122,12 @@ func (rm *RoomManager) CreateRoom() string {
 	room := &Room{
 		Password: password,
 		Clients:  make(map[*websocket.Conn]bool),
+		Interval: interval,
 	}
 
 	rm.Rooms[password] = room
 
-	log.Printf("新しいルームが作成されました. Password: %s", password)
+	log.Printf("新しいルームが作成されました. Password: %s, Interval: %d", password, interval)
 	log.Printf("現在のルーム一覧: %v", rm.Rooms) // 追加されたルーム一覧をログに出力
 
 	return password
@@ -133,7 +135,17 @@ func (rm *RoomManager) CreateRoom() string {
 
 // 部屋を作成するハンドラー関数
 func CreateRoomHandler(w http.ResponseWriter, r *http.Request) {
-	password := roomManager.CreateRoom()
+	var req struct {
+		Interval int `json:"interval"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("リクエストのデコードエラー: %v", err)
+		http.Error(w, "リクエストのデコードエラー", http.StatusBadRequest)
+		return
+	}
+
+	password := roomManager.CreateRoom(req.Interval)
 	if password == "" {
 		log.Println("部屋の作成に失敗しました")
 		http.Error(w, "部屋の作成に失敗しました", http.StatusInternalServerError)
@@ -329,8 +341,8 @@ func main() {
 	http.HandleFunc("/check-bingo", CheckBingoHandler)
 	// 生成された数字のリストをリセットするエンドポイント
 	http.HandleFunc("/reset-generated-numbers", ResetGeneratedNumbersHandler)
-	// 数字生成間隔を設定するエンドポイント
-	http.HandleFunc("/set-interval", SetIntervalHandler)
+	// // 数字生成間隔を設定するエンドポイント
+	// http.HandleFunc("/set-interval", SetIntervalHandler)
 	// ルームごとの数字取得エンドポイント
 	http.HandleFunc("/get-room-numbers", GetRoomNumbersHandler)
 
@@ -339,22 +351,6 @@ func main() {
 	go generateAndWriteNumbersToFiles() // 数字生成のゴルーチンを起動
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
-
-// 共通の数字取得とレスポンス作成を行う関数
-// func handleNumbersRequest(w http.ResponseWriter, password string) {
-// 	numbers, err := roomManager.GetNumbersForRoom(password)
-// 	if err != nil {
-// 		log.Printf("数字の取得に失敗しました: %v", err)
-// 		http.Error(w, fmt.Sprintf("数字の取得に失敗しました: %v", err), http.StatusInternalServerError)
-// 		return
-// 	}
-
-// 	resp := ResponseData{
-// 		Numbers: numbers,
-// 	}
-// 	w.Header().Set("Content-Type", "application/json")
-// 	json.NewEncoder(w).Encode(resp)
-// }
 
 var generatedNumbers []int // 重複をチェックするためのスライス
 
@@ -438,29 +434,26 @@ func ResetGeneratedNumbersHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonResponse)
 }
 
-// 数字生成間隔を設定するハンドラー関数
-func SetIntervalHandler(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Interval int `json:"interval"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("SetIntervalHandler関数リクエストのデコードエラー: %v", err)
-		http.Error(w, "リクエスト本文が無効です", http.StatusBadRequest)
-		return
-	}
-
-	interval, err := strconv.Atoi(strconv.Itoa(req.Interval))
-	if err != nil || interval <= 0 {
-		log.Printf("SetIntervalHandler関数 無効な間隔値: %v\n", err)
-		http.Error(w, "無効な間隔値", http.StatusBadRequest)
-		return
-	}
-
-	// intervalSeconds = interval
-	// log.Printf("数字生成間隔が設定されました: %d秒", intervalSeconds)
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Interval has been set"))
-}
+// func SetIntervalHandler(w http.ResponseWriter, r *http.Request) {
+// 	var req struct {
+// 		Interval int `json:"interval"`
+// 	}
+// 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+// 		log.Printf("SetIntervalHandler関数リクエストのデコードエラー: %v", err)
+// 		http.Error(w, "リクエスト本文が無効です", http.StatusBadRequest)
+// 		return
+// 	}
+// 	interval, err := strconv.Atoi(strconv.Itoa(req.Interval))
+// 	if err != nil || interval <= 0 {
+// 		log.Printf("SetIntervalHandler関数 無効な間隔値: %v\n", err)
+// 		http.Error(w, "無効な間隔値", http.StatusBadRequest)
+// 		return
+// 	}
+// 	// intervalSeconds = interval
+// 	// log.Printf("数字生成間隔が設定されました: %d秒", intervalSeconds)
+// 	w.WriteHeader(http.StatusOK)
+// 	w.Write([]byte("Interval has been set"))
+// }
 
 // BingoCard型の定義
 type BingoCard [5][5]int
