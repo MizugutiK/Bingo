@@ -145,6 +145,7 @@ function createRoom() {
     }
 }
 
+
 function handleSetIntervalBtnClick() {
     elementsToHide.forEach(element => {
         element.style.display = 'none';
