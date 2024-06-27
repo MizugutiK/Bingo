@@ -1,6 +1,7 @@
 let ws;
 let generateNumbersEnabled = false; // 初期状態はfalse
 let roomPassword = ''; // グローバル変数としてパスワードを宣言
+
 // DOMContentLoaded イベントでページが読み込まれた後に実行される
 document.addEventListener("DOMContentLoaded", function() {
     initializeWebSocket();

@@ -95,7 +95,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	room, exists := roomManager.Rooms[req.Password]
 	if !exists {
 		// ルームが存在しない場合は新しいルームを作成する
-		interval := 60 // 例としてインターバル値を設定（必要に応じて変更）
+		interval := 30 // 例としてインターバル値を設定（必要に応じて変更）
 		roomPassword := roomManager.CreateRoom(interval)
 
 		// クライアントに新しいルームの情報を送信
@@ -211,7 +211,7 @@ func CreateRoomHandler(w http.ResponseWriter, r *http.Request) {
 // ルームの数字を取得するハンドラー関数
 func GetRoomNumbersHandler(w http.ResponseWriter, r *http.Request) {
 	password := r.URL.Query().Get("password")
-	log.Printf("GetRoomNumbersHandler関数 リクエストされたパスワード: %s", password)
+	log.Printf("GetRoomNumbersHandler 関数 リクエストされたパスワード: %s", password)
 
 	// パスワードが提供されていない場合のエラーハンドリング
 	if password == "" {
@@ -220,23 +220,58 @@ func GetRoomNumbersHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ルームの数字を取得する
-	numbers, err := roomManager.GetNumbersForRoom(password)
-	if err != nil {
-		log.Printf("数字の取得に失敗しました: %v", err)
-		http.Error(w, fmt.Sprintf("数字の取得に失敗しました: %v", err), http.StatusInternalServerError)
+	// ルームを取得する
+	room := roomManager.GetRoomByPassword(password)
+	if room == nil {
+		log.Printf("ルームが見つかりませんでした: %s", password)
+		http.Error(w, "ルームが見つかりませんでした", http.StatusNotFound)
 		return
 	}
 
-	log.Printf("取得した数字: %v", numbers)
+	log.Printf("取得したルーム: %+v", room)
 
-	// サーバーサイドのJSON生成例
-	resp := map[string][]int{"numbers": numbers} // numbers をキーにしたマップを生成
+	// ルームのインターバル値を取得する
+	interval := room.Interval
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		log.Printf("JSONエンコードに失敗しました: %v", err)
+	// ファイル名を取得
+	fileName := getFileName(room)
+
+	// ファイルを開いて数字を一つずつ送信
+	file, err := os.Open(fileName)
+	if err != nil {
+		log.Printf("ファイル %s のオープンに失敗しました: %v", fileName, err)
 		http.Error(w, "サーバーエラー", http.StatusInternalServerError)
+		return
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		num, err := strconv.Atoi(scanner.Text())
+		if err != nil {
+			log.Printf("数字の変換に失敗しました: %v", err)
+			http.Error(w, "サーバーエラー", http.StatusInternalServerError)
+			return
+		}
+
+		// 数字をJSONでクライアントに送信
+		resp := map[string]int{"number": num}
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			log.Printf("JSONエンコードに失敗しました: %v", err)
+			http.Error(w, "サーバーエラー", http.StatusInternalServerError)
+			return
+		}
+		// ログを追加して数字の送信を記録
+		log.Printf("数字をクライアントに送信しました: %d", num)
+		// インターバル時間待機
+		time.Sleep(time.Duration(interval) * time.Second)
+	}
+
+	if err := scanner.Err(); err != nil {
+		log.Printf("ファイルのスキャンエラー: %v", err)
+		http.Error(w, "サーバーエラー", http.StatusInternalServerError)
+		return
 	}
 }
 
@@ -299,8 +334,8 @@ func generateAndWriteNumbersToFiles() {
 			}
 		}
 
-		// 一定時間待機する（例として1秒）
-		time.Sleep(1000)
+		// // 一定時間待機する（例として1秒）
+		// time.Sleep(1000)
 	}
 }
 
