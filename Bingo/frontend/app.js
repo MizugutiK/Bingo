@@ -239,26 +239,30 @@ function handleNewNumber(data) {
     try {
         const numbers = Array.isArray(data) ? data : [data]; // 受信データが配列であることを確認
 
-        const latestNumber = numbers[numbers.length - 1];
-        generatedNumbers.push(latestNumber);
-
-        enableClickableCells();
-        numberDiv.textContent = `Newナンバー: ${latestNumber}`;
-
-        logDiv.innerHTML = '';
         numbers.forEach(number => {
-            const logItem = document.createElement('div');
-            logItem.textContent = `ログ: ${number}`;
-            logDiv.appendChild(logItem);
+            // すでにログに表示されている数字でない場合のみ表示する
+            if (!generatedNumbers.includes(number)) {
+                generatedNumbers.push(number);
+
+                enableClickableCells();
+                numberDiv.textContent = `Newナンバー: ${number}`;
+
+                const logItem = document.createElement('div');
+                logItem.textContent = `ログ: ${number}`;
+                logDiv.appendChild(logItem);
+
+                logDiv.scrollTop = logDiv.scrollHeight; // ログを常に最下部にスクロール
+
+                playAudio(audioPath);
+
+                // mute-toggleが存在する場合にのみ処理を行う
+                const muteToggle = document.getElementById('mute-toggle');
+                if (muteToggle && muteToggle.checked) {
+                    const audio = new Audio(audioPath);
+                    audio.play().catch(error => console.error('Error playing audio:', error));
+                }
+            }
         });
-        playAudio(audioPath);
-        
-        // mute-toggleが存在する場合にのみ処理を行う
-        const muteToggle = document.getElementById('mute-toggle');
-        if (muteToggle && muteToggle.checked) {
-            const audio = new Audio(audioPath);
-            audio.play().catch(error => console.error('Error playing audio:', error));
-        }
     } catch (error) {
         console.error('Error handling new number data:', error.message);
         alert('サーバーからのデータ処理中にエラーが発生しました。しばらくしてからもう一度お試しください。');

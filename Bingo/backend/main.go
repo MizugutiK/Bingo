@@ -244,6 +244,8 @@ func GetRoomNumbersHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Write([]byte("\n"))    // 改行を追加して区切る
 		w.(http.Flusher).Flush() // フラッシュしてクライアントに送信
+
+		time.Sleep(20 * time.Second) //後でルームごとのインターバルにする
 	}
 }
 
