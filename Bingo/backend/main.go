@@ -208,10 +208,10 @@ func CreateRoomHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// ルームの数字を取得するハンドラー関数
+// ルームの数字を一つずつ取得するハンドラー関数
 func GetRoomNumbersHandler(w http.ResponseWriter, r *http.Request) {
 	password := r.URL.Query().Get("password")
-	log.Printf("GetRoomNumbersHandler関数 リクエストされたパスワード: %s", password)
+	log.Printf("GetRoomNumbersHandler 関数 リクエストされたパスワード: %s", password)
 
 	// パスワードが提供されていない場合のエラーハンドリング
 	if password == "" {
@@ -220,7 +220,7 @@ func GetRoomNumbersHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ルームの数字を取得する
+	// ルームの数字を一つずつ取得する
 	numbers, err := roomManager.GetNumbersForRoom(password)
 	if err != nil {
 		log.Printf("数字の取得に失敗しました: %v", err)
@@ -230,13 +230,20 @@ func GetRoomNumbersHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("取得した数字: %v", numbers)
 
-	// サーバーサイドのJSON生成例
-	resp := map[string][]int{"numbers": numbers} // numbers をキーにしたマップを生成
-
+	// サーバーサイドで一つずつ数字を送信する
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		log.Printf("JSONエンコードに失敗しました: %v", err)
-		http.Error(w, "サーバーエラー", http.StatusInternalServerError)
+	encoder := json.NewEncoder(w)
+
+	// ループを使用して数字を個々に送信
+	for _, num := range numbers {
+		resp := map[string]int{"number": num} // number をキーにしたマップを生成
+		if err := encoder.Encode(resp); err != nil {
+			log.Printf("JSONエンコードに失敗しました: %v", err)
+			http.Error(w, "サーバーエラー", http.StatusInternalServerError)
+			return
+		}
+		w.Write([]byte("\n"))    // 改行を追加して区切る
+		w.(http.Flusher).Flush() // フラッシュしてクライアントに送信
 	}
 }
 
