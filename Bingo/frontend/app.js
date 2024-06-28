@@ -22,10 +22,20 @@ function initializeWebSocket() {
     };
 
     ws.onmessage = function(event) {
-        if (generateNumbersEnabled) {
-            const generatedNumbersFromServer = JSON.parse(event.data);
-            generatedNumbers = generatedNumbersFromServer;
-            enableClickableCells();
+        console.log('WebSocketからデータを受信しました:', event.data);
+    
+        try {
+            const message = JSON.parse(event.data);
+            // メッセージの内容や形式に応じて処理を分岐する
+            if (message.type === 'number') {
+                const number = message.number;
+                console.log('Received number:', number);
+                handleNewNumber(number); // 新しい数字を処理する関数を呼び出す
+            } else {
+                console.error('Invalid message format received from WebSocket:', message);
+            }
+        } catch (error) {
+            console.error('Error parsing WebSocket message:', error);
         }
     };
 
@@ -191,16 +201,33 @@ function fetchRoomNumbers() {
             if (!response.ok) {
                 throw new Error(`部屋番号の取得に失敗しました。サーバーが返されました ${response.status} ${response.statusText}`);
             }
-            return response.json(); // JSONとして受け取る
-        })
-        .then(jsonData => {
-            console.log('Received data:', jsonData); // 受け取ったデータをログに出力
+            // レスポンスをストリームとして受け取る
+            const reader = response.body.getReader();
 
-            if (jsonData && jsonData.numbers) {
-                handleNewNumber(jsonData.numbers); // 受け取った数字のリストを処理する
-            } else {
-                throw new Error('応答形式が無効です: 数字がありません');
-            }
+            // データを一つずつ処理する
+            let decoder = new TextDecoder();
+            let received = '';
+
+            reader.read().then(function processText({ done, value }) {
+                if (done) {
+                    console.log('Received data:', received);
+                    return;
+                }
+            
+                received += decoder.decode(value, { stream: true });
+            
+                // データを改行で区切って分割する
+                let parts = received.split('\n');
+                parts.forEach(part => {
+                    if (part.trim() !== '') {
+                        const jsonData = JSON.parse(part);
+                        console.log('Received number:', jsonData.number);
+                        handleNewNumber(jsonData.number);
+                    }
+                });
+            
+                return reader.read().then(processText);
+            });            
         })
         .catch(error => {
             console.error('部屋番号の取得中にエラーが発生しました:', error.message);
@@ -210,14 +237,9 @@ function fetchRoomNumbers() {
 
 function handleNewNumber(data) {
     try {
-        const numbers = data;
-
-        if (!Array.isArray(numbers)) {
-            throw new Error('Invalid message format received from WebSocket.');
-        }
+        const numbers = Array.isArray(data) ? data : [data]; // 受信データが配列であることを確認
 
         const latestNumber = numbers[numbers.length - 1];
-
         generatedNumbers.push(latestNumber);
 
         enableClickableCells();
