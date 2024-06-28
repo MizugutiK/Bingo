@@ -234,7 +234,7 @@ func GetRoomNumbersHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	encoder := json.NewEncoder(w)
 
-	// ループを使用して数字を個々に送信
+	// 一度だけエンコーダーを作成して使用する
 	for i, num := range numbers {
 		log.Printf("ループカウント: %d", i+1)        // ループカウントをログに出力
 		resp := map[string]int{"number": num} // number をキーにしたマップを生成
@@ -247,7 +247,6 @@ func GetRoomNumbersHandler(w http.ResponseWriter, r *http.Request) {
 		w.(http.Flusher).Flush() // フラッシュしてクライアントに送信
 
 		time.Sleep(20 * time.Second)
-
 	}
 }
 
