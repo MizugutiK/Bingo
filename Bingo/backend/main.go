@@ -234,18 +234,22 @@ func GetRoomNumbersHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	encoder := json.NewEncoder(w)
 
-	// 一度だけエンコーダーを作成して使用する
-	for i, num := range numbers {
-		log.Printf("ループカウント: %d", i+1)        // ループカウントをログに出力
-		resp := map[string]int{"number": num} // number をキーにしたマップを生成
-		if err := encoder.Encode(resp); err != nil {
+	// カウントごとに部分的な配列を生成してクライアントに送信
+	for i := 0; i < len(numbers); i++ {
+		partNumbers := numbers[:i+1] // i番目までの部分配列を取得
+		log.Printf("カウント%d: %v", i+1, partNumbers)
+
+		// JSONエンコードしてクライアントに送信
+		if err := encoder.Encode(partNumbers); err != nil {
 			log.Printf("JSONエンコードに失敗しました: %v", err)
 			http.Error(w, "サーバーエラー", http.StatusInternalServerError)
 			return
 		}
+
 		w.Write([]byte("\n"))    // 改行を追加して区切る
 		w.(http.Flusher).Flush() // フラッシュしてクライアントに送信
 
+		// 20秒待機する（テスト用に追加）
 		time.Sleep(20 * time.Second)
 	}
 }

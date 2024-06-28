@@ -213,19 +213,23 @@ function fetchRoomNumbers() {
                     console.log('Received data:', received);
                     return;
                 }
-            
+                
                 received += decoder.decode(value, { stream: true });
-            
+                
                 // データを改行で区切って分割する
                 let parts = received.split('\n');
                 parts.forEach(part => {
                     if (part.trim() !== '') {
-                        const jsonData = JSON.parse(part);
-                        console.log('Received number:', jsonData.number);
-                        handleNewNumber(jsonData.number);
+                        try {
+                            const jsonData = JSON.parse(part);
+                            processReceivedData(jsonData);
+                        } catch (error) {
+                            console.error('Error parsing JSON:', error);
+                            console.error('JSON parse error occurred in part:', part);
+                        }
                     }
                 });
-            
+                
                 return reader.read().then(processText);
             });            
         })
@@ -235,34 +239,53 @@ function fetchRoomNumbers() {
         });
 }
 
-function handleNewNumber(data) {
+function processReceivedData(data) {
     try {
-        const numbers = Array.isArray(data) ? data : [data]; // 受信データが配列であることを確認
-
-        numbers.forEach(number => {
-            // すでにログに表示されている数字でない場合のみ表示する
-            if (!generatedNumbers.includes(number)) {
-                generatedNumbers.push(number);
-
-                enableClickableCells();
-                numberDiv.textContent = `Newナンバー: ${number}`;
-
-                const logItem = document.createElement('div');
-                logItem.textContent = `ログ: ${number}`;
-                logDiv.appendChild(logItem);
-
-                logDiv.scrollTop = logDiv.scrollHeight; // ログを常に最下部にスクロール
-
-                playAudio(audioPath);
-
-                // mute-toggleが存在する場合にのみ処理を行う
-                const muteToggle = document.getElementById('mute-toggle');
-                if (muteToggle && muteToggle.checked) {
-                    const audio = new Audio(audioPath);
-                    audio.play().catch(error => console.error('Error playing audio:', error));
+        if (typeof data === 'number') {
+            console.log('Received number:', data);
+            handleNewNumber(data);
+        } else if (Array.isArray(data)) {
+            data.forEach(item => {
+                if (typeof item === 'number') {
+                    console.log('Received number:', item);
+                    handleNewNumber(item);
+                } else {
+                    console.error('Invalid JSON data received:', item);
                 }
+            });
+        } else {
+            console.error('Invalid JSON data received:', data);
+        }
+    } catch (error) {
+        console.error('Error handling new number data:', error.message);
+        alert('サーバーからのデータ処理中にエラーが発生しました。しばらくしてからもう一度お試しください。');
+    }
+}
+
+function handleNewNumber(number) {
+    try {
+        // すでにログに表示されている数字でない場合のみ表示する
+        if (!generatedNumbers.includes(number)) {
+            generatedNumbers.push(number);
+
+            enableClickableCells();
+            numberDiv.textContent = `Newナンバー: ${number}`;
+
+            const logItem = document.createElement('div');
+            logItem.textContent = `ログ: ${number}`;
+            logDiv.appendChild(logItem);
+
+            logDiv.scrollTop = logDiv.scrollHeight; // ログを常に最下部にスクロール
+
+            playAudio(audioPath);
+
+            // mute-toggleが存在する場合にのみ処理を行う
+            const muteToggle = document.getElementById('mute-toggle');
+            if (muteToggle && muteToggle.checked) {
+                const audio = new Audio(audioPath);
+                audio.play().catch(error => console.error('Error playing audio:', error));
             }
-        });
+        }
     } catch (error) {
         console.error('Error handling new number data:', error.message);
         alert('サーバーからのデータ処理中にエラーが発生しました。しばらくしてからもう一度お試しください。');
