@@ -219,7 +219,13 @@ func GetRoomNumbersHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "パスワードが提供されていません", http.StatusBadRequest)
 		return
 	}
-
+	// ルームを取得
+	room := roomManager.GetRoomByPassword(password)
+	if room == nil {
+		log.Printf("ルームが見つかりませんでした: %s", password)
+		http.Error(w, "ルームが見つかりませんでした", http.StatusInternalServerError)
+		return
+	}
 	// ルームの数字を一つずつ取得する
 	numbers, err := roomManager.GetNumbersForRoom(password)
 	if err != nil {
@@ -249,8 +255,8 @@ func GetRoomNumbersHandler(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("\n"))    // 改行を追加して区切る
 		w.(http.Flusher).Flush() // フラッシュしてクライアントに送信
 
-		// 20秒待機する（テスト用に追加）
-		time.Sleep(20 * time.Second)
+		// インターバル待機
+		time.Sleep(time.Duration(room.Interval) * time.Second)
 	}
 }
 
