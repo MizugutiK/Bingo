@@ -298,8 +298,9 @@ func generateAndWriteNumbersToFiles() {
 
 		// すべてのルームのファイルに数字を書き込む
 		for _, room := range roomManager.Rooms {
-			newNumber := generateUniqueNumber() // 重複しない数字を生成する
-			fileName := getFileName(room)       // ルームごとのファイル名を取得する
+			newNumber := generateUniqueNumber()    // 重複しない数字を生成する
+			fileName := getFileName(room)          // ルームごとのファイル名を取得する
+			log.Printf("生成されたファイル名: %s", fileName) // デバッグ用にファイル名をログ出力
 
 			// ファイルをオープン（追記モードで、存在しない場合は作成）
 			file, err := os.OpenFile(fileName, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
@@ -318,6 +319,9 @@ func generateAndWriteNumbersToFiles() {
 				log.Printf("ファイル %s のクローズに失敗しました: %v", fileName, err)
 			}
 		}
+
+		// 少し待機してから再試行する
+		time.Sleep(time.Second)
 	}
 }
 
