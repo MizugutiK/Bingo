@@ -2,12 +2,129 @@ let ws;
 let generateNumbersEnabled = false; // 初期状態はfalse
 let roomPassword = ''; // グローバル変数としてパスワードを宣言
 
-// DOMContentLoaded イベントでページが読み込まれた後に実行される
+// セッションストレージに保存するキーを定義
+const SESSION_STORAGE_KEY = 'bingoGameState';
+
+// DOMが読み込まれた後にゲーム状態を復元する
 document.addEventListener("DOMContentLoaded", function() {
+    restoreGameStateFromSessionStorage(); // 先にゲーム状態を復元
     initializeWebSocket();
     adjustAllCellFonts();
     setupEventListeners();
+    // setTimeout(restoreGameStateFromSessionStorage, 100); // 少し遅延させて復元
 });
+
+function saveGameStateToSessionStorage() {
+    const gameState = {
+        bingoCardState: serializeBingoCardState(), // ビンゴカードの状態を保存
+        generatedNumbers: generatedNumbers, // 生成された数字の配列を保存
+        roomPassword: roomPassword, // パスワードを保存
+        styleState: serializeStyleState()  // スタイルの状態を保存
+    };
+    const serializedGameState = JSON.stringify(gameState);
+    console.log("Saving to session storage:", serializedGameState); // 保存内容をコンソールに表示
+    sessionStorage.setItem(SESSION_STORAGE_KEY, serializedGameState);
+}
+
+// セッションストレージから状態を復元する関数
+function restoreGameStateFromSessionStorage() {
+    const storedGameState = sessionStorage.getItem(SESSION_STORAGE_KEY);
+    // console.log("Restoring from session storage:", storedGameState); 
+    if (storedGameState) {
+        const gameState = JSON.parse(storedGameState);
+        console.log("Parsed game state:", gameState); // パースされた内容をコンソールに表示
+
+        // ビンゴカードの状態を復元
+        if (gameState.bingoCardState) {
+            deserializeBingoCardState(gameState.bingoCardState);
+        }
+
+        // 生成された数字を復元
+        if (gameState.generatedNumbers) {
+            generatedNumbers = gameState.generatedNumbers;
+            displayGeneratedNumbers(generatedNumbers); // 生成された数字を表示する
+        }
+
+        // パスワードを復元
+        if (gameState.roomPassword) {
+            roomPassword = gameState.roomPassword;
+        }
+
+        // スタイルの状態を復元
+        if (gameState.styleState) {
+            deserializeStyleState(gameState.styleState);
+        }
+    }
+}
+
+// ビンゴカードの状態をシリアライズする関数
+function serializeBingoCardState() {
+    const cells = document.querySelectorAll('.cell');
+    const cellStates = [];
+    cells.forEach(cell => {
+        const state = {
+            rowIndex: cell.dataset.rowIndex,
+            cellIndex: cell.dataset.cellIndex,
+            textContent: cell.textContent,
+            className: cell.className,
+            noneBlackState: cell.classList.contains('none-black')
+        };
+        cellStates.push(state);
+    });
+    return cellStates;
+}
+
+function deserializeBingoCardState(state) {
+    console.log("Deserializing bingo card state:", state);
+    state.forEach(cellState => {
+        let cell = document.querySelector(`.cell[data-row-index="${cellState.rowIndex}"][data-cell-index="${cellState.cellIndex}"]`);
+        if (!cell) {
+            // セルが存在しない場合は新たに作成
+            cell = document.createElement('div');
+            cell.classList.add('cell');
+            cell.dataset.rowIndex = cellState.rowIndex;
+            cell.dataset.cellIndex = cellState.cellIndex;
+            document.getElementById('bingo-card').appendChild(cell);
+        }
+        // console.log(`Updating cell at [${cellState.rowIndex}, ${cellState.cellIndex}] with:`, cellState);
+        cell.textContent = cellState.textContent;
+        cell.className = cellState.className;
+        // none/blackの状態を反映
+        if (cellState.noneBlackState) {
+            cell.classList.add('none-black');
+        } else {
+            cell.classList.remove('none-black');
+        }
+    });
+}
+// 生成された数字を表示する関数
+function displayGeneratedNumbers(numbers) {
+    const generatedNumbersContainer = document.getElementById('log-container');
+    generatedNumbersContainer.innerHTML = '';
+    numbers.forEach(number => {
+        const numberElement = document.createElement('div');
+        numberElement.textContent = `ログ: ${number}`; // 追加のテキストを含める
+        generatedNumbersContainer.appendChild(numberElement);
+    });
+}
+// スタイルの状態を保存する関数
+function serializeStyleState() {
+    const row = document.querySelector('.row.mt-2');
+    return {
+        display: row ? row.style.display : ''
+    };
+}
+
+// スタイルの状態を復元する関数
+function deserializeStyleState(state) {
+    const row = document.querySelector('.row.mt-2');
+    if (row && state) {
+        row.style.display = state.display;
+    }
+}
+
+// ページをリロードする際にセッションストレージに状態を保存する
+window.addEventListener('beforeunload', saveGameStateToSessionStorage);
 
 // WebSocketの設定
 const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -19,6 +136,10 @@ function initializeWebSocket() {
 
     ws.onopen = function(event) {
         console.log('WebSocket接続が確立された.');
+         // 必要に応じて、接続後の処理をここに追加
+         if (roomPassword) {
+            ws.send(JSON.stringify({ type: 'join', password: roomPassword }));
+        }
     };
 
     ws.onmessage = function(event) {
@@ -31,6 +152,9 @@ function initializeWebSocket() {
                 const number = message.number;
                 console.log('Received number:', number);
                 handleNewNumber(number); // 新しい数字を処理する関数を呼び出す
+            } else if (message.message) {
+                console.log('Received message:', message.message);
+                // 他のメッセージを処理
             } else {
                 console.error('Invalid message format received from WebSocket:', message);
             }
@@ -115,7 +239,6 @@ function joinRoom() {
             console.log(data.message); // 成功メッセージをコンソールに表示
             // パスワードが正しい場合の処理を追加
             fetchRoomNumbers(); // 成功した場合に、テキストファイルの情報を取得する処理を呼び出す
-            // その他の処理を追加
         }
     })
     .catch(error => {
