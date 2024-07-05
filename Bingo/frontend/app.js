@@ -57,7 +57,7 @@ function restoreGameStateFromSessionStorage() {
     }
 }
 
-// ビンゴカードの状態をシリアライズする関数
+// ビンゴカードを保存可能な形式にする関数
 function serializeBingoCardState() {
     const cells = document.querySelectorAll('.cell');
     const cellStates = [];
@@ -76,7 +76,7 @@ function serializeBingoCardState() {
 
 // ビンゴカードの状態を復元する関数
 function deserializeBingoCardState(state) {
-    console.log("Deserializing bingo card state:", state);
+    // console.log("Deserializing bingo card state:", state);
     state.forEach(cellState => {
         let cell = document.querySelector(`.cell[data-row-index="${cellState.rowIndex}"][data-cell-index="${cellState.cellIndex}"]`);
         if (!cell) {
@@ -112,7 +112,7 @@ function displayGeneratedNumbers(numbers) {
 
 // スタイルの状態を保存する関数
 function serializeStyleState() {
-    const row = document.querySelector('.row.mt-2');
+    // const row = document.querySelector('.row.mt-2');
     return {
         display: row ? row.style.display : ''
     };
@@ -120,7 +120,7 @@ function serializeStyleState() {
 
 // スタイルの状態を復元する関数
 function deserializeStyleState(state) {
-    const row = document.querySelector('.row.mt-2');
+    // const row = document.querySelector('.row.mt-2');
     if (row && state) {
         row.style.display = state.display;
     }
@@ -189,13 +189,13 @@ const createRoomButton = document.getElementById('create-room'); // ルーム作
 const roomTypeSelect = document.getElementById('room-type'); // ルームタイプ選択要素
 const setIntervalBtn = document.getElementById('set-interval-btn'); // インターバル設定ボタン要素
 const intervalInput = document.getElementById('interval'); // インターバル入力要素
-
+const row = document.querySelector('.row.mt-2');
 // UI周りの表示非表示用の宣言
 const elementsToHide = document.querySelectorAll('#interval, #set-interval-btn, #CreateRoom, #join-room-container,#reset-game,#interval-label');
 const password = document.getElementById('room-password').value
 
 // ビンゴカードを非表示にする
-document.querySelector('.row.mt-2').style.display = 'none';
+row.style.display = 'none';
 
 // イベントリスナーの設定
 function setupEventListeners() {
@@ -284,7 +284,7 @@ function handleSetIntervalBtnClick() {
         element.style.display = 'none';
     });
     // ビンゴカードを表示する
-    document.querySelector('.row.mt-2').style.display = 'block';
+  row.style.display = 'block';
 
     // 新しいゲームの開始をサーバーに要求し、ビンゴカードをレンダリングする
     fetch('/new-game')
