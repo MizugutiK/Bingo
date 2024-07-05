@@ -228,12 +228,7 @@ function joinRoom() {
         },
         body: JSON.stringify({ password: password })
     })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error('Failed to join room. Server returned ' + response.status + ' ' + response.statusText);
-        }
-        return response.json();
-    })
+    .then(handleResponse)
     .then(data => {
         if (data.message) {
             console.log(data.message); // 成功メッセージをコンソールに表示
@@ -241,10 +236,7 @@ function joinRoom() {
             fetchRoomNumbers(); // 成功した場合に、テキストファイルの情報を取得する処理を呼び出す
         }
     })
-    .catch(error => {
-        console.error('Error:', error.message);
-        alert(`Error: ${error.message}`);
-    });
+    .catch(handleError);
 }
 
 // ルーム作成リクエストをサーバーに送信
