@@ -132,35 +132,20 @@ const wsHost = `${wsProtocol}//localhost:8080/ws`;
 
 // WebSocketのイベントリスナーを定義
 function initializeWebSocket() {
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsHost = `${wsProtocol}//localhost:8080/ws`;
     ws = new WebSocket(wsHost);
 
     ws.onopen = function(event) {
         console.log('WebSocket接続が確立された.');
-         // 必要に応じて、接続後の処理をここに追加
-         if (roomPassword) {
+        if (roomPassword) {
             ws.send(JSON.stringify({ type: 'join', password: roomPassword }));
         }
     };
 
     ws.onmessage = function(event) {
         console.log('WebSocketからデータを受信しました:', event.data);
-    
-        try {
-            const message = JSON.parse(event.data);
-            // メッセージの内容や形式に応じて処理を分岐する
-            if (message.type === 'number') {
-                const number = message.number;
-                console.log('Received number:', number);
-                handleNewNumber(number); // 新しい数字を処理する関数を呼び出す
-            } else if (message.message) {
-                console.log('Received message:', message.message);
-                // 他のメッセージを処理
-            } else {
-                console.error('Invalid message format received from WebSocket:', message);
-            }
-        } catch (error) {
-            console.error('Error parsing WebSocket message:', error);
-        }
+        handleWebSocketMessage(event);
     };
 
     ws.onerror = function(error) {
@@ -171,6 +156,21 @@ function initializeWebSocket() {
         console.log('WebSocket接続が閉じた:', event);
         setTimeout(initializeWebSocket, 1000); // 1秒後に再接続
     };
+}
+
+function handleWebSocketMessage(event) {
+    try {
+        const message = JSON.parse(event.data);
+        if (message.type === 'number') {
+            handleNewNumber(message.number);
+        } else if (message.message) {
+            console.log('Received message:', message.message);
+        } else {
+            console.error('Invalid message format received from WebSocket:', message);
+        }
+    } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
+    }
 }
 
 // 必要な要素を取得
