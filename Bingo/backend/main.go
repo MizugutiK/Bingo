@@ -18,53 +18,56 @@ import (
 // WebSocketのアップグレーダー設定
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return true
+		return true // オリジンのチェックを無効化してすべてのオリジンからの接続を許可する
 	},
 }
 
 // RoomManager構造体
 type RoomManager struct {
-	Rooms map[string]*Room
-	Mutex sync.Mutex
+	Rooms map[string]*Room // ルームを管理するマップ
+	Mutex sync.Mutex       // Roomsへのアクセスを同期するためのミューテックス
 }
 
+// Room構造体
 type Room struct {
-	Password  string
-	Clients   map[*websocket.Conn]bool
-	Mutex     sync.Mutex
-	Interval  int           // ルーム全体のインターバル値
-	Countdown int           // インターバルの残り時間
-	done      chan struct{} // ゴルーチンの終了シグナル用のチャネル
+	Password  string                   // ルームのパスワード
+	Clients   map[*websocket.Conn]bool // 接続されているクライアントのマップ
+	Mutex     sync.Mutex               // Clientsへのアクセスを同期するためのミューテックス
+	Interval  int                      // ルーム全体のインターバル値
+	Countdown int                      // インターバルの残り時間
+	done      chan struct{}            // ゴルーチンの終了シグナル用のチャネル
 }
 
 // レスポンス用の構造体
 type ResponseData struct {
-	Numbers int `json:"numbers"`
+	Numbers int `json:"numbers"` // JSONレスポンスの構造体
 }
 
 // 新しいRoomManagerインスタンスを作成
 func NewRoomManager() *RoomManager {
 	return &RoomManager{
-		Rooms: make(map[string]*Room),
+		Rooms: make(map[string]*Room), // 新しいルームを作成するためのマップ
 	}
 }
+
+// StartCountdown 関数はルームのカウントダウンを開始します
 func (rm *RoomManager) StartCountdown(room *Room) {
-	room.done = make(chan struct{})
-	ticker := time.NewTicker(time.Second)
+	room.done = make(chan struct{})       // 終了シグナル用のチャネルを作成
+	ticker := time.NewTicker(time.Second) // 1秒ごとにtickするタイマーを作成
 
 	go func() {
-		defer ticker.Stop()
+		defer ticker.Stop() // タイマーを停止する
 		for {
 			select {
 			case <-ticker.C:
 				room.Mutex.Lock()
-				room.Countdown = (room.Countdown - 1 + room.Interval) % room.Interval
+				room.Countdown = (room.Countdown - 1 + room.Interval) % room.Interval // インターバルのカウントダウンを計算する
 				room.Mutex.Unlock()
 
-				// クライアントに残り時間を送信する処理を追加する
+				// クライアントに残り時間を送信する処理を追加する（未実装）
 
 			case <-room.done:
-				return
+				return // ゴルーチンを終了する
 			}
 		}
 	}()
@@ -73,17 +76,17 @@ func (rm *RoomManager) StartCountdown(room *Room) {
 // WebSocket接続を処理する関数
 func handleConnections(w http.ResponseWriter, r *http.Request) {
 	// WebSocket 接続処理
-	conn, err := upgrader.Upgrade(w, r, nil)
+	conn, err := upgrader.Upgrade(w, r, nil) // WebSocketをアップグレードする
 	if err != nil {
 		log.Fatalf("WebSocket アップグレード エラー: %v", err)
 		http.Error(w, "WebSocket アップグレード エラー", http.StatusInternalServerError)
 		return
 	}
-	defer conn.Close()
+	defer conn.Close() // 関数終了時に接続を閉じる
 
 	// 初回メッセージでルーム名とパスワードを受け取る
 	var req struct {
-		Password string `json:"password"`
+		Password string `json:"password"` // 初回メッセージの構造体
 	}
 	if err := conn.ReadJSON(&req); err != nil {
 		log.Printf("初回メッセージの読み取りエラー: %v", err)
@@ -95,8 +98,8 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	room, exists := roomManager.Rooms[req.Password]
 	if !exists {
 		// ルームが存在しない場合は新しいルームを作成する
-		interval := 60 // 例としてインターバル値を設定（必要に応じて変更）
-		roomPassword := roomManager.CreateRoom(interval)
+		interval := 60                                   // 例としてインターバル値を設定（必要に応じて変更）
+		roomPassword := roomManager.CreateRoom(interval) // 新しいルームを作成する
 
 		// クライアントに新しいルームの情報を送信
 		conn.WriteJSON(map[string]interface{}{
@@ -106,13 +109,13 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			"remainingTime": interval, // 初回はインターバル値で設定
 		})
 
-		room = roomManager.Rooms[roomPassword]
+		room = roomManager.Rooms[roomPassword] // ルームを更新
 	} else {
 		// 既存のルームに参加する
 		room.Mutex.Lock()
-		interval := room.Interval
-		countdown := room.Countdown
-		room.Clients[conn] = true
+		interval := room.Interval   // インターバルを取得
+		countdown := room.Countdown // カウントダウンを取得
+		room.Clients[conn] = true   // クライアントにルームを追加
 		room.Mutex.Unlock()
 
 		// クライアントにルームの情報を送信
@@ -129,7 +132,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("接続が切れました: %v", err)
 			room.Mutex.Lock()
-			delete(room.Clients, conn) // クライアントをマップから削除
+			delete(room.Clients, conn) // クライアントを削除
 			room.Mutex.Unlock()
 			break
 		}
@@ -143,13 +146,13 @@ func (rm *RoomManager) JoinRoom(password string, ws *websocket.Conn) bool {
 
 	room, exists := rm.Rooms[password]
 	if !exists {
-		return false
+		return false // パスワードに対応するルームが存在しない場合は参加できない
 	}
 
 	room.Mutex.Lock()
 	defer room.Mutex.Unlock()
-	room.Clients[ws] = true
-	return true
+	room.Clients[ws] = true // WebSocket接続をルームに追加する
+	return true             // 参加成功
 }
 
 // ルーム作成関数
@@ -157,25 +160,25 @@ func (rm *RoomManager) CreateRoom(interval int) string {
 	rm.Mutex.Lock()
 	defer rm.Mutex.Unlock()
 
-	password := generatePassword(PasswordLength)
+	password := generatePassword(PasswordLength) // ランダムなパスワードを生成
 	room := &Room{
-		Password: password,
-		Clients:  make(map[*websocket.Conn]bool),
-		Interval: interval,
+		Password: password,                       // パスワードを設定
+		Clients:  make(map[*websocket.Conn]bool), // WebSocket接続のマップを初期化
+		Interval: interval,                       // インターバルを設定
 	}
 
-	rm.Rooms[password] = room
+	rm.Rooms[password] = room // パスワードをキーにしてルームを登録
 
 	log.Printf("新しいルームが作成されました. Password: %s, Interval: %d", password, interval)
-	log.Printf("現在のルーム一覧: %v", rm.Rooms) // 追加されたルーム一覧をログに出力
+	log.Printf("現在のルーム一覧: %v", rm.Rooms) // 現在のルーム一覧をログに出力
 
-	return password
+	return password // 作成したルームのパスワードを返す
 }
 
 // 部屋を作成するハンドラー関数
 func CreateRoomHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Interval int `json:"interval"`
+		Interval int `json:"interval"` // リクエストからのインターバル値
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -184,12 +187,13 @@ func CreateRoomHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	password := roomManager.CreateRoom(req.Interval)
+	password := roomManager.CreateRoom(req.Interval) // リクエストされたインターバルで新しいルームを作成
 	if password == "" {
 		log.Println("部屋の作成に失敗しました")
 		http.Error(w, "部屋の作成に失敗しました", http.StatusInternalServerError)
 		return
 	}
+
 	// パスワードに対応するルームを取得
 	room := roomManager.GetRoomByPassword(password)
 	if room == nil {
@@ -200,7 +204,7 @@ func CreateRoomHandler(w http.ResponseWriter, r *http.Request) {
 
 	// レスポンスデータを構築
 	resp := map[string]string{
-		"password": room.Password,
+		"password": room.Password, // レスポンスにパスワードを含める
 	}
 
 	// レスポンスをJSON形式で返す
@@ -219,13 +223,15 @@ func GetRoomNumbersHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "パスワードが提供されていません", http.StatusBadRequest)
 		return
 	}
-	// ルームを取得
+
+	// パスワードに対応するルームを取得
 	room := roomManager.GetRoomByPassword(password)
 	if room == nil {
 		log.Printf("ルームが見つかりませんでした: %s", password)
 		http.Error(w, "ルームが見つかりませんでした", http.StatusInternalServerError)
 		return
 	}
+
 	// ルームの数字を一つずつ取得する
 	numbers, err := roomManager.GetNumbersForRoom(password)
 	if err != nil {
@@ -262,7 +268,7 @@ func GetRoomNumbersHandler(w http.ResponseWriter, r *http.Request) {
 
 // ルームの情報からファイル名を生成する関数
 func getFileName(room *Room) string {
-	return fmt.Sprintf("%s.txt", room.Password)
+	return fmt.Sprintf("%s.txt", room.Password) // ルームのパスワードをファイル名に使用
 }
 
 // テキストファイルから数字を読み取る関数
@@ -271,7 +277,7 @@ func readNumbersFromFile(fileName string) ([]int, error) {
 
 	file, err := os.Open(fileName)
 	if err != nil {
-		return numbers, err
+		return numbers, err // ファイルオープンエラーを返す
 	}
 	defer file.Close()
 
@@ -279,14 +285,15 @@ func readNumbersFromFile(fileName string) ([]int, error) {
 	for scanner.Scan() {
 		num, err := strconv.Atoi(scanner.Text())
 		if err != nil {
-			return numbers, err
+			return numbers, err // 数字の読み取りエラーを返す
 		}
-		numbers = append(numbers, num)
+		numbers = append(numbers, num) // 数字をスライスに追加
 	}
 
-	return numbers, nil
+	return numbers, nil // 読み取った数字のスライスを返す
 }
 
+// ルームごとに数字を生成してファイルに書き込むループ
 func generateAndWriteNumbersToFiles() {
 	for {
 		// ルームが存在しない場合は待機する
@@ -332,7 +339,7 @@ func (rm *RoomManager) GetNumbersForRoom(password string) ([]int, error) {
 
 	room, exists := rm.Rooms[password]
 	if !exists {
-		log.Printf("GetNumbersForRoom: ルームが見つかりません: %s", password) // エラーログ追加
+		log.Printf("GetNumbersForRoom: ルームが見つかりません: %s", password) // ルームが存在しない場合のエラーログ
 		return nil, fmt.Errorf("ルームが見つかりません: %s", password)
 	}
 
@@ -348,7 +355,7 @@ func (rm *RoomManager) GetNumbersForRoom(password string) ([]int, error) {
 		return nil, fmt.Errorf("数字の読み取りに失敗しました: %v", err)
 	}
 
-	return numbers, nil
+	return numbers, nil // 読み取った数字のスライスを返す
 }
 
 // 重複しない数字を生成する関数
@@ -415,7 +422,7 @@ var generatedNumbers []int // 重複をチェックするためのスライス
 
 // ルームに関する定数と構造体
 const (
-	PasswordLength = 6
+	PasswordLength = 6 // ルームのパスワードの長さ
 )
 
 // パスワードに基づいてルームを取得する関数
@@ -423,9 +430,10 @@ func (rm *RoomManager) GetRoomByPassword(password string) *Room {
 	rm.Mutex.Lock()
 	defer rm.Mutex.Unlock()
 
-	return rm.Rooms[password]
+	return rm.Rooms[password] // パスワードに対応するルームを返す
 }
 
+// ルームに参加するためのハンドラー関数
 func JoinRoomHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "無効なHTTPメソッド", http.StatusMethodNotAllowed)
@@ -433,7 +441,7 @@ func JoinRoomHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Password string `json:"password"`
+		Password string `json:"password"` // JSONからのパスワードリクエスト
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("リクエストのデコードエラー: %v", err)
@@ -442,14 +450,14 @@ func JoinRoomHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// ルームに参加
-	success := roomManager.JoinRoom(req.Password, nil) // nilはWebSocket接続ではないため
+	success := roomManager.JoinRoom(req.Password, nil) // WebSocket接続は未実装
 	if !success {
 		log.Printf("部屋に参加できませんでした: %s", req.Password)
 		http.Error(w, "部屋に参加できませんでした", http.StatusUnauthorized)
 		return
 	}
 
-	log.Printf("JoinRoomHandler 関数 部屋に参加しました: %s", req.Password) // パスワードが正しい場合のログ
+	log.Printf("JoinRoomHandler: 部屋に参加しました: %s", req.Password) // 部屋参加成功時のログ
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"message": "部屋に参加しました"})
@@ -457,17 +465,16 @@ func JoinRoomHandler(w http.ResponseWriter, r *http.Request) {
 
 // ビンゴカードを生成するハンドラー関数
 func NewGameHandler(w http.ResponseWriter, r *http.Request) {
-	bingoCard := generateBingoCard()
+	bingoCard := generateBingoCard() // ビンゴカードを生成
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(bingoCard)
-
+	json.NewEncoder(w).Encode(bingoCard) // ビンゴカードをJSONで返す
 }
 
 // ビンゴチェックを行うハンドラー関数
 func CheckBingoHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Card   BingoCard  `json:"card"`
-		Marked [5][5]bool `json:"marked"`
+		Card   BingoCard  `json:"card"`   // ビンゴカード
+		Marked [5][5]bool `json:"marked"` // マークされたセルの状態
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("リクエストのデコードエラー: %v", err)
@@ -475,15 +482,15 @@ func CheckBingoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isBingo := checkBingo(req.Card, req.Marked)
-	resp := map[string]bool{"bingo": isBingo}
+	isBingo := checkBingo(req.Card, req.Marked) // ビンゴをチェック
+	resp := map[string]bool{"bingo": isBingo}   // レスポンスを準備
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	json.NewEncoder(w).Encode(resp) // ビンゴの結果をJSONで返す
 }
 
 // 生成された数字のリストをリセットするハンドラー関数
 func ResetGeneratedNumbersHandler(w http.ResponseWriter, r *http.Request) {
-	generatedNumbers = []int{}
+	generatedNumbers = []int{} // 生成された数字をリセット
 	response := map[string]string{"message": "生成された番号はリセットされました"}
 	jsonResponse, err := json.Marshal(response)
 	if err != nil {
@@ -491,51 +498,52 @@ func ResetGeneratedNumbersHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonResponse)
+	w.Write(jsonResponse) // レスポンスをJSONで返す
 }
 
 // BingoCard型の定義
-type BingoCard [5][5]int
+type BingoCard [5][5]int // ビンゴカードの型定義
 
 // ビンゴカードを生成する関数
 func generateBingoCard() BingoCard {
-	rand.Seed(time.Now().UnixNano())
+	rand.Seed(time.Now().UnixNano()) // ランダムシードの初期化
 
 	var card BingoCard
-	usedNumbers := make(map[int]bool)
+	usedNumbers := make(map[int]bool) // 使用済みの数字を管理するマップ
 
 	for i := 0; i < 5; i++ {
 		for j := 0; j < 5; j++ {
-			num := rand.Intn(75) + 1
+			num := rand.Intn(75) + 1 // 1から75までのランダムな数字を生成
 			for usedNumbers[num] {
-				num = rand.Intn(75) + 1
+				num = rand.Intn(75) + 1 // 既に使用されている場合は再生成
 			}
-			usedNumbers[num] = true
-			card[i][j] = num
+			usedNumbers[num] = true // 使用済みマップに追加
+			card[i][j] = num        // カードに数字をセット
 		}
 	}
 
-	card[2][2] = 0 // FREE space
-	return card
+	card[2][2] = 0 // FREE space (中央のマスを0でセット)
+
+	return card // 生成されたビンゴカードを返す
 }
 
 // ビンゴをチェックする関数
 func checkBingo(card BingoCard, marked [5][5]bool) bool {
-	// Horizontal check
+	// 横方向のチェック
 	for i := 0; i < 5; i++ {
 		if marked[i][0] && marked[i][1] && marked[i][2] && marked[i][3] && marked[i][4] {
-			return true
+			return true // 横一列が全てマークされている場合、ビンゴ
 		}
 	}
 
-	// Vertical check
+	// 縦方向のチェック
 	for j := 0; j < 5; j++ {
 		if marked[0][j] && marked[1][j] && marked[2][j] && marked[3][j] && marked[4][j] {
-			return true
+			return true // 縦一列が全てマークされている場合、ビンゴ
 		}
 	}
 
-	// Diagonal check (left to right)
+	// 斜め方向のチェック（左上から右下）
 	diagonal1 := true
 	for i := 0; i < 5; i++ {
 		if !marked[i][i] {
@@ -544,10 +552,10 @@ func checkBingo(card BingoCard, marked [5][5]bool) bool {
 		}
 	}
 	if diagonal1 {
-		return true
+		return true // 左上から右下の斜めが全てマークされている場合、ビンゴ
 	}
 
-	// Diagonal check (right to left)
+	// 斜め方向のチェック（右上から左下）
 	diagonal2 := true
 	for i := 0; i < 5; i++ {
 		if !marked[i][4-i] {
@@ -555,5 +563,5 @@ func checkBingo(card BingoCard, marked [5][5]bool) bool {
 			break
 		}
 	}
-	return diagonal2
+	return diagonal2 // 右上から左下の斜めが全てマークされている場合、ビンゴ
 }
