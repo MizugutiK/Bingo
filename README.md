@@ -5,7 +5,6 @@ Goを使ったバックエンドの練習
 sequenceDiagram;
 participant ホストユーザーフロント
 participant ゲストユーザーフロント
-<!-- participant フロント -->
 participant サーバー
 
 ホストユーザーフロント  ->>     サーバー:ルーム制作依頼
